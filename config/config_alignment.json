@@ -1,0 +1,8 @@
+{
+    "max_features": 1000,
+    "good_match_percent": 0.2,
+    "x_min": 750,
+    "x_max": 3500,
+    "y_min": 480,
+    "y_max": 2550
+}
