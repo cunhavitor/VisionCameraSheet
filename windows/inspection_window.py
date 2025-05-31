@@ -98,11 +98,28 @@ class InspectionWindow(ctk.CTkToplevel):
         self.sliders_frame.pack(fill="x", pady=10)
 
         # Threshold Entry (substitui slider)
+        # Variável e label como já tinhas
         self.threshold_var = ctk.StringVar(value=str(self.diff_threshold))
-        self.threshold_entry = ctk.CTkEntry(self.sliders_frame, textvariable=self.threshold_var)
-        self.threshold_entry.pack(fill="x", pady=10)
         self.threshold_label = ctk.CTkLabel(self.sliders_frame, text=f"Threshold: {self.diff_threshold}")
         self.threshold_label.pack()
+
+        # Frame para agrupar a entry e os botões
+        threshold_frame = ctk.CTkFrame(self.sliders_frame)
+        threshold_frame.pack(fill="x", pady=10)
+
+        # Entry
+        self.threshold_entry = ctk.CTkEntry(threshold_frame, textvariable=self.threshold_var, width=80)
+        self.threshold_entry.pack(side="left", padx=(0, 5))
+
+        # Botão de diminuir (-)
+        btn_dec = ctk.CTkButton(threshold_frame, text="-", width=30, command=self._decrement_threshold)
+        btn_dec.pack(side="left")
+
+        # Botão de aumentar (+)
+        btn_inc = ctk.CTkButton(threshold_frame, text="+", width=30, command=self._increment_threshold)
+        btn_inc.pack(side="left")
+
+        # Validar entrada e evento de foco
         self.threshold_entry.configure(validate="key", validatecommand=(self.register(self._validate_numeric), '%P'))
         self.threshold_entry.bind("<FocusOut>", self._on_threshold_change)
 
@@ -303,4 +320,14 @@ class InspectionWindow(ctk.CTkToplevel):
 
         self.lbl_img.configure(image=self.tk_defect)
         self.lbl_img.image = self.tk_defect
+
+    def _decrement_threshold(self):
+        new_val = max(0, self.diff_threshold - 1)
+        self.threshold_var.set(str(new_val))
+        self._update_threshold(new_val)
+
+    def _increment_threshold(self):
+        new_val = min(255, self.diff_threshold + 1)
+        self.threshold_var.set(str(new_val))
+        self._update_threshold(new_val)
 
