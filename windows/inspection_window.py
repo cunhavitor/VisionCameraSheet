@@ -1,13 +1,14 @@
 import json
+import time
+
 import cv2
 import numpy as np
 import customtkinter as ctk
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageTk
 from customtkinter import CTkImage
 from models.align_image import align_with_template
 from config.config import INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT
 from config.utils import load_inspection_params
-from skimage.metrics import structural_similarity as ssim  # Adiciona no topo do ficheiro
 
 
 def _prepare_image(img_cv, size, draw_contours=None):
@@ -77,6 +78,8 @@ class InspectionWindow(ctk.CTkToplevel):
         self.morph_iterations = params.get("morph_iterations", 1)
         self.min_defect_area = params.get("detect_area", 1)
         self.ssim_threshold = 30  # Valor inicial, pode ser ajustado pelo utilizador
+
+
 
         self.show_defect_contours = True
         # Criar a variável
@@ -216,7 +219,14 @@ class InspectionWindow(ctk.CTkToplevel):
         self.frame_img.pack_propagate(False)
 
         self.lbl_img = ctk.CTkLabel(self.frame_img, text="")
+        self.lbl_img.bind("<Motion>", self.on_mouse_move)
+        self.lbl_img.bind("<Leave>", self.on_mouse_leave)  # para esconder tooltip ao sair
+
         self.lbl_img.pack(padx=2, pady=2)
+
+        # Criar tooltip para mostrar diferença no mouse
+        self.tooltip = ctk.CTkLabel(self.frame_img, text="", bg_color="gray80")
+        self.tooltip.place_forget()
 
         # Preparação das imagens
         self.tk_template = _prepare_image_grayscale(self.template_masked, s)
@@ -239,7 +249,9 @@ class InspectionWindow(ctk.CTkToplevel):
         self._update_defect_image()
 
     def _detect_defects(self, tpl, aligned, mask):
-        # Converter para grayscale e equalizar
+        start_time = time.time()  # marca início
+
+        # --- teu código original ---
         t_gray = cv2.cvtColor(tpl, cv2.COLOR_BGR2GRAY)
         a_gray = cv2.cvtColor(aligned, cv2.COLOR_BGR2GRAY)
 
@@ -247,9 +259,7 @@ class InspectionWindow(ctk.CTkToplevel):
         a_gray_eq = cv2.equalizeHist(a_gray)
 
         diff = cv2.subtract(t_gray_eq, a_gray_eq)  # defeitos escuros
-        # diff_inv = cv2.subtract(a_gray_eq, t_gray_eq)  # defeitos claros (não amarelos)
 
-        # Converter para LAB para detectar amarelos (canal b)
         tpl_lab = cv2.cvtColor(tpl, cv2.COLOR_BGR2LAB)
         aligned_lab = cv2.cvtColor(aligned, cv2.COLOR_BGR2LAB)
 
@@ -258,31 +268,108 @@ class InspectionWindow(ctk.CTkToplevel):
 
         diff_b = cv2.subtract(aligned_b, tpl_b)
 
-        # Threshold para amarelos (mais brilhantes no canal b)
         _, yellow_mask = cv2.threshold(diff_b, self.bright_threshold, 255, cv2.THRESH_BINARY)
-
-        # Threshold para defeitos escuros
         _, darker_mask = cv2.threshold(diff, self.dark_threshold, 255, cv2.THRESH_BINARY)
 
-        # Combine máscaras - só com escuros e amarelos
         combined = cv2.bitwise_or(darker_mask, yellow_mask)
 
-        # Morfologia para limpar ruídos
         k = np.ones((self.morph_kernel_size, self.morph_kernel_size), np.uint8)
         clean = cv2.morphologyEx(combined, cv2.MORPH_OPEN, k, iterations=self.morph_iterations)
         clean = cv2.morphologyEx(clean, cv2.MORPH_CLOSE, k, iterations=self.morph_iterations)
 
-        # Aplica a máscara da folha
         clean_masked = cv2.bitwise_and(clean, clean, mask=mask)
 
-        # Encontra contornos
         contours, _ = cv2.findContours(clean_masked, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        # Filtrar por área mínima
-        # min_defect_area = getattr(self, "min_defect_area", 30)  # valor padrão: 30 px
         filtered_contours = [cnt for cnt in contours if cv2.contourArea(cnt) >= self.min_defect_area]
 
+        end_time = time.time()  # marca fim
+
+        print(f"_detect_defects demorou {end_time - start_time:.4f} segundos")
+
         return clean_masked, filtered_contours
+
+    def _recalculate_defects(self):
+
+        self.defect_mask, self.defect_contours = self._detect_defects(
+            self.template_masked,
+            self.current_masked,
+            self.mask_full
+        )
+        self._update_defect_image()
+
+    def _update_defect_image(self):
+        start_time = time.time()  # marca início
+        s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
+        self.total_defects_var.set(str(len(self.defect_contours)))
+
+        if self.show_defect_contours:
+            aligned_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
+            self.tk_defect = _prepare_image_grayscale(aligned_masked, s, draw_contours=self.defect_contours)
+        else:
+            aligned_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
+            self.tk_defect = _prepare_image_grayscale(aligned_masked, s)
+
+        self.lbl_img.configure(image=self.tk_defect)
+        self.lbl_img.image = self.tk_defect
+
+        end_time = time.time()  # marca fim
+
+        print(f"_detect_defects demorou {end_time - start_time:.4f} segundos")
+
+    def on_mouse_move(self, event):
+        x, y = event.x, event.y
+
+        img_h, img_w = self.current_full.shape[:2]
+        lbl_w = self.lbl_img.winfo_width()
+        lbl_h = self.lbl_img.winfo_height()
+
+        if lbl_w == 0 or lbl_h == 0:
+            return
+
+        # Converte coordenadas para a imagem original
+        img_x = int(x * img_w / lbl_w)
+        img_y = int(y * img_h / lbl_h)
+
+        # Limita área 10x10
+        x1 = max(img_x - 25, 0)
+        y1 = max(img_y - 25, 0)
+        x2 = min(img_x + 25, img_w)
+        y2 = min(img_y + 25, img_h)
+
+        tpl_gray = cv2.cvtColor(self.template_full, cv2.COLOR_BGR2GRAY)
+        cur_gray = cv2.cvtColor(self.current_full, cv2.COLOR_BGR2GRAY)
+
+        region_tpl = tpl_gray[y1:y2, x1:x2]
+        region_cur = cur_gray[y1:y2, x1:x2]
+
+        diff = np.mean(np.abs(region_tpl.astype(np.int16) - region_cur.astype(np.int16)))
+
+        # Cria imagem em zoom (100x100) da região atual
+        zoom_img = cv2.resize(region_cur, (50, 50), interpolation=cv2.INTER_NEAREST)
+        zoom_img_rgb = cv2.cvtColor(zoom_img, cv2.COLOR_GRAY2RGB)
+        pil_img = Image.fromarray(zoom_img_rgb)
+        self.zoom_imgtk = ImageTk.PhotoImage(pil_img)
+
+        # Cria tooltip visual se não existir
+        if not hasattr(self, 'tooltip_img'):
+            self.tooltip_img = ctk.CTkLabel(self.frame_img, text="")
+            self.tooltip_img.configure(image=self.zoom_imgtk)
+            self.tooltip_img.image = self.zoom_imgtk  # evita garbage collection
+            self.tooltip_img.place(x=x + 15, y=y - 120)
+
+            self.tooltip = ctk.CTkLabel(self.frame_img, text="", text_color="black", bg_color="gray80")
+            self.tooltip.place(x=x + 15, y=y - 15)
+        else:
+            self.tooltip_img.configure(image=self.zoom_imgtk)
+            self.tooltip_img.image = self.zoom_imgtk
+            self.tooltip_img.place(x=x + 15, y=y - 120)
+
+            self.tooltip.configure(text=f"Diferença: {diff:.2f}")
+            self.tooltip.place(x=x + 15, y=y - 15)
+
+    def on_mouse_leave(self, event):
+        self.tooltip.place_forget()
 
     def _on_kernel_change(self, event):
         val = self.kernel_var.get()
@@ -336,13 +423,7 @@ class InspectionWindow(ctk.CTkToplevel):
             self._recalculate_defects()
             self._save_params()
 
-    def _recalculate_defects(self):
-        self.defect_mask, self.defect_contours = self._detect_defects(
-            self.template_masked,
-            self.current_masked,
-            self.mask_full
-        )
-        self._update_defect_image()
+
 
     def _toggle_image(self):
         if self.toggle.get():
@@ -374,16 +455,4 @@ class InspectionWindow(ctk.CTkToplevel):
         with open(self.param_path, "w") as f:
             json.dump(params, f, indent=4)
 
-    def _update_defect_image(self):
-        s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
-        self.total_defects_var.set(str(len(self.defect_contours)))
 
-        if self.show_defect_contours:
-            aligned_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
-            self.tk_defect = _prepare_image_grayscale(aligned_masked, s, draw_contours=self.defect_contours)
-        else:
-            aligned_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
-            self.tk_defect = _prepare_image_grayscale(aligned_masked, s)
-
-        self.lbl_img.configure(image=self.tk_defect)
-        self.lbl_img.image = self.tk_defect

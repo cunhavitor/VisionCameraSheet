@@ -20,45 +20,77 @@ class App(ctk.CTk):
         self.geometry("800x600")
         ctk.set_appearance_mode("dark")
 
-        # Inicialização da webcam
-        self.cap = cv2.VideoCapture(0)
-        self.preview_running = True
-        self.current_frame = None
-
         # Layout principal
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        self.main_frame.grid_columnconfigure((0, 1, 2), weight=1)  # 3 colunas com distribuição igual
 
-        # --- Botões à esquerda ---
-        self.buttons_frame = ctk.CTkFrame(self.main_frame, width=200)
-        self.buttons_frame.pack(side="left", fill="y", padx=(0, 20))
-        self.buttons_frame.pack_propagate(False)
+        # --- Botões à esquerda (coluna 0) ---
 
-        self.adjust_positions_button = ctk.CTkButton(
-            self.buttons_frame, text="🛠️ Adjust Positions", command=self.open_adjust_positions)
-        self.adjust_positions_button.pack(pady=(0, 10), fill="x")
 
-        self.gallery_button = ctk.CTkButton(
-            self.buttons_frame, text="📂 Ver Galeria", command=self.open_gallery)
-        self.gallery_button.pack(pady=(0, 10), fill="x")
-
-        self.inspect_button = ctk.CTkButton(
-            self.buttons_frame, text="👁️ Inspecção", command=self.open_inspection)
-        self.inspect_button.pack(pady=(0, 10), fill="x")
-
-        self.mask_window_button = ctk.CTkButton(
-            self.buttons_frame, text="🎭 Máscara", command=self.open_mask_window)
-        self.mask_window_button.pack(pady=(0, 10), fill="x")
-
-        self.alignment_adjust_window_button = ctk.CTkButton(
-            self.buttons_frame, text="↔️ Alignment Adjust", command=self.open_alignment_adjust_window)
-        self.alignment_adjust_window_button.pack(pady=(0, 10), fill="x")
-
+        self.user_frame = ctk.CTkFrame(self.main_frame)
+        self.user_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        self.user_frame.grid_propagate(False)
 
         self.status_label = ctk.CTkLabel(
-            self.buttons_frame, text="Pronto para iniciar.", width=140, anchor="w", wraplength=140)
-        self.status_label.pack(side="bottom", pady=10)
+            self.user_frame, text="Usuário:",
+            width=140,
+            wraplength=140,
+            text_color="white",
+            font = ("Arial",20))
+        self.status_label.pack(side="top", pady=10)
 
+        self.login_button = ctk.CTkButton(
+            self.user_frame, text="Login", command=self.open_adjust_positions, width=200)
+        self.login_button.pack(pady=(10, 10), anchor="center")
+
+        self.new_user_button = ctk.CTkButton(
+            self.user_frame, text="Novo User", command=self.open_adjust_positions, width=200)
+        self.new_user_button.pack(pady=(0, 10), anchor="center")
+
+        # --- Coluna do meio (coluna 1) ---
+        self.middle_frame = ctk.CTkFrame(self.main_frame)
+        self.middle_frame.grid(row=0, column=1, sticky="nsew", pady=20, padx=20)
+
+        self.status_label = ctk.CTkLabel(
+            self.middle_frame, text="Settings:",
+            width=140,
+            wraplength=140,
+            text_color="white",
+            font=("Arial", 20))
+        self.status_label.pack(side="top", pady=10)
+
+        self.adjust_positions_button = ctk.CTkButton(
+            self.middle_frame, text="🛠️ Adjust Positions", command=self.open_adjust_positions, width=200)
+        self.adjust_positions_button.pack(pady=(0, 10), anchor="center")
+
+        self.mask_window_button = ctk.CTkButton(
+            self.middle_frame, text="🎭 Máscara", command=self.open_mask_window, width=200)
+        self.mask_window_button.pack(pady=(0, 10), anchor="center")
+
+        self.alignment_adjust_window_button = ctk.CTkButton(
+            self.middle_frame, text="↔️ Alignment Adjust", command=self.open_alignment_adjust_window, width=200)
+        self.alignment_adjust_window_button.pack(pady=(0, 10), anchor="center")
+
+        # --- Coluna da direita (coluna 2) ---
+        self.right_frame = ctk.CTkFrame(self.main_frame)
+        self.right_frame.grid(row=0, column=2, sticky="nsew", pady=20, padx=20)
+
+        self.status_label = ctk.CTkLabel(
+            self.right_frame, text="Inspeção:",
+            width=140,
+            wraplength=140,
+            text_color="white",
+            font=("Arial", 20))
+        self.status_label.pack(side="top", pady=10)
+
+        self.gallery_button = ctk.CTkButton(
+            self.right_frame, text="📂 Ver Galeria", command=self.open_gallery, width=200)
+        self.gallery_button.pack(pady=(0, 10), anchor="center")
+
+        self.inspect_button = ctk.CTkButton(
+            self.right_frame, text="👁️ Inspecção", command=self.open_inspection, width=200)
+        self.inspect_button.pack(pady=(0, 10), anchor="center")
 
     def open_adjust_positions(self):
         self.withdraw()  # Esconde a janela principal

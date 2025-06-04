@@ -1,5 +1,7 @@
 {
-    "diff_threshold": 35,
-    "morph_kernel_size": 1,
-    "morph_iterations": 6
+    "dark_threshold": 55,
+    "bright_threshold": 22,
+    "morph_kernel_size": 3,
+    "morph_iterations": 2,
+    "detect_area": 10
 }
