@@ -1,5 +1,5 @@
 {
-    "diff_threshold": 28,
+    "diff_threshold": 35,
     "morph_kernel_size": 1,
     "morph_iterations": 6
 }

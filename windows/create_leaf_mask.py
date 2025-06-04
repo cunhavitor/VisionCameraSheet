@@ -117,11 +117,11 @@ class LeafMaskCreator(ctk.CTkToplevel):
         for i in range(len(self.points)):
             x = int(self.points[i][0] * self.scale)
             y = int(self.points[i][1] * self.scale)
-            cv2.circle(img, (x, y), 5, (0, 0, 255), -1)
+            cv2.circle(img, (x, y), 3, (0, 0, 255), -1)
             if i > 0:
                 x_prev = int(self.points[i - 1][0] * self.scale)
                 y_prev = int(self.points[i - 1][1] * self.scale)
-                cv2.line(img, (x_prev, y_prev), (x, y), (0, 255, 0), 2)
+                cv2.line(img, (x_prev, y_prev), (x, y), (0, 0, 255), 1)
         if self.done and len(self.points) > 2:
             x_first = int(self.points[0][0] * self.scale)
             y_first = int(self.points[0][1] * self.scale)
