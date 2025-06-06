@@ -1,14 +1,17 @@
 import json
 import time
+from tkinter import StringVar
 
+import customtkinter as ctk
 import cv2
 import numpy as np
-import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageTk
 from customtkinter import CTkImage
-from models.align_image import align_with_template
+
 from config.config import INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT
 from config.utils import load_inspection_params
+from models.align_image import align_with_template
+from models.defect_detector import detect_defects # Already there, good!
 
 
 def _prepare_image(img_cv, size, draw_contours=None):
@@ -64,46 +67,83 @@ def _validate_numeric(value_if_allowed):
 class InspectionWindow(ctk.CTkToplevel):
     def __init__(self, parent, template_path, current_path, mask_path):
         super().__init__(parent)
-        #self.state("zoomed")
+
+        self.zoom_imgtk = None
+        self.area_info_textbox = None
+        self.state("zoomed")
         self.title("Janela de Inspeção")
 
-        # parâmetros ajustáveis (valores default)
-        # Carrega parâmetros do JSON
+        # parameters adjustable (default values)
         self.param_path = "config/inspection_params.json"
         params = load_inspection_params(self.param_path)
 
         self.dark_threshold = params.get("dark_threshold", 30)
         self.bright_threshold = params.get("bright_threshold", 30)
-        self.morph_kernel_size = params.get("morph_kernel_size", 2)
-        self.morph_iterations = params.get("morph_iterations", 1)
+
+        self.dark_morph_kernel_size = params.get("dark_morph_kernel_size", 3)
+        self.dark_morph_iterations = params.get("dark_morph_iterations", 1)
+        self.bright_morph_kernel_size = params.get("bright_morph_kernel_size", 3)
+        self.bright_morph_iterations = params.get("bright_morph_iterations", 1)
+
         self.min_defect_area = params.get("detect_area", 1)
-        self.ssim_threshold = 30  # Valor inicial, pode ser ajustado pelo utilizador
+        self.dark_gradient_threshold = params.get("dark_gradient_threshold", 10)
 
+        # --- NEW THRESHOLDS FOR COLOR DEFECTS ---
+        self.blue_threshold = params.get("blue_threshold", 25) # Default value for blue
+        self.red_threshold = params.get("red_threshold", 25)   # Default value for red
 
-
-        self.show_defect_contours = True
-        # Criar a variável
+        # Initialize all StringVar and BooleanVar objects here
+        self.dark_threshold_var = ctk.StringVar(value=str(self.dark_threshold))
+        self.bright_threshold_var = ctk.StringVar(value=str(self.bright_threshold))
+        self.dark_kernel_var = ctk.StringVar(value=str(self.dark_morph_kernel_size))
+        self.dark_iterations_var = ctk.StringVar(value=str(self.dark_morph_iterations))
+        self.bright_kernel_var = ctk.StringVar(value=str(self.bright_morph_kernel_size))
+        self.bright_iterations_var = ctk.StringVar(value=str(self.bright_morph_iterations))
+        self.min_defect_area_var = ctk.StringVar(value=str(self.min_defect_area))
+        self.total_defects_var = ctk.StringVar(value="0")
         self.show_contours_var = ctk.BooleanVar(value=True)
+        self.dark_gradient_threshold_var = ctk.StringVar(value=str(self.dark_gradient_threshold))
+        # --- NEW VARS FOR COLOR THRESHOLDS ---
+        self.blue_threshold_var = ctk.StringVar(value=str(self.blue_threshold))
+        self.red_threshold_var = ctk.StringVar(value=str(self.red_threshold))
 
-        # 1) Carrega a s imagens e a máscara (máscara do template, geralmente)
+
+        # 1) Load images and mask
         self.template_full = cv2.imread(template_path)
         self.current_full = cv2.imread(current_path)
         self.mask_full = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
 
-        # 2) Alinha a imagem atual para o template
+        # 2) Align current image to template
         self.aligned_full, M = align_with_template(self.current_full, self.template_full)
 
-        # 3) Aplica a máscara original (que está no espaço do template) na imagem alinhada
+        # 3) Apply original mask (template space) to aligned image
         self.current_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
         self.template_masked = cv2.bitwise_and(self.template_full, self.template_full, mask=self.mask_full)
 
-        # 4) Usa essa máscara fixa para detectar defeitos (já no espaço alinhado)
-        self.defect_mask, self.defect_contours = self._detect_defects(
-            self.template_masked, self.current_masked, self.mask_full)
+        # 4) Use fixed mask to detect defects (already in aligned space)
+        # --- UPDATED CALL TO DETECT_DEFECTS ---
+        self.defect_mask, self.defect_contours, \
+        self.darker_mask_filtered, self.yellow_mask, \
+        self.blue_mask, self.red_mask = detect_defects( # <-- NEW RETURN VALUES
+            self.template_masked,
+            self.current_masked,
+            self.mask_full,
+            self.dark_threshold,
+            self.bright_threshold,
+            self.dark_morph_kernel_size,
+            self.dark_morph_iterations,
+            self.bright_morph_kernel_size,
+            self.bright_morph_iterations,
+            self.min_defect_area,
+            self.dark_gradient_threshold,
+            self.blue_threshold, # <-- NEW
+            self.red_threshold   # <-- NEW
+        )
 
-        # 5) Prepara UI
+        # 5) Setup UI
         self._setup_ui()
 
+    # --- _setup_ui method (remains mostly as you had it, no changes needed inside it anymore) ---
     def _setup_ui(self):
         s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
 
@@ -119,98 +159,130 @@ class InspectionWindow(ctk.CTkToplevel):
         self.sliders_frame = ctk.CTkFrame(self.left_panel)
         self.sliders_frame.pack(fill="x", pady=10)
 
-        # --- DARK THRESHOLD ENTRY ---
-        self.dark_threshold_var = ctk.StringVar(value=str(self.dark_threshold))
-        self.dark_threshold_entry = ctk.CTkEntry(self.sliders_frame,
-                                                 textvariable=self.dark_threshold_var,
-                                                 fg_color="white",
-                                                 text_color= "black")
-        self.dark_threshold_entry.pack(fill="x", pady=10)
-        self.dark_threshold_label = ctk.CTkLabel(self.sliders_frame, text=f"Threshold Escuro: {self.dark_threshold}")
-        self.dark_threshold_label.pack()
-        self.dark_threshold_entry.configure(validate="key",
-                                            validatecommand=(self.register(_validate_numeric), '%P'))
-        self.dark_threshold_entry.bind("<FocusOut>", self._on_dark_threshold_change)
+        def create_param_entry(parent_frame, label_text, var_obj, bind_command):
+            frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
+            frame.pack(fill="x", pady=5)
 
-        # --- BRIGHT THRESHOLD ENTRY ---
-        self.bright_threshold_var = ctk.StringVar(value=str(self.bright_threshold))
-        self.bright_threshold_entry = ctk.CTkEntry(self.sliders_frame,
-                                                   textvariable=self.bright_threshold_var,
-                                                   fg_color="white",
-                                                   text_color= "black")
-        self.bright_threshold_entry.pack(fill="x", pady=10)
-        self.bright_threshold_label = ctk.CTkLabel(self.sliders_frame, text=f"Threshold Claro: {self.bright_threshold}")
-        self.bright_threshold_label.pack()
-        self.bright_threshold_entry.configure(validate="key",
-                                              validatecommand=(self.register(_validate_numeric), '%P'))
-        self.bright_threshold_entry.bind("<FocusOut>", self._on_bright_threshold_change)
+            label = ctk.CTkLabel(frame, text=label_text)
+            label.pack(side="left", padx=(0, 10))
 
-        # Kernel Size Entry (substitui slider)
-        self.kernel_var = ctk.StringVar(value=str(self.morph_kernel_size))
-        self.kernel_entry = ctk.CTkEntry(self.sliders_frame,
-                                         textvariable=self.kernel_var,
-                                         fg_color="white",
-                                         text_color= "black")
-        self.kernel_entry.pack(fill="x", pady=10)
-        self.kernel_label = ctk.CTkLabel(self.sliders_frame, text=f"Kernel Size: {self.morph_kernel_size}")
-        self.kernel_label.pack()
-        self.kernel_entry.configure(validate="key", validatecommand=(self.register(_validate_numeric), '%P'))
-        self.kernel_entry.bind("<FocusOut>", self._on_kernel_change)
+            entry = ctk.CTkEntry(frame,
+                                 textvariable=var_obj,
+                                 fg_color="white",
+                                 text_color="black",
+                                 width=50)
+            entry.pack(side="right")
 
-        # Iterations Entry (substitui slider)
-        self.iterations_var = ctk.StringVar(value=str(self.morph_iterations))
-        self.iterations_entry = ctk.CTkEntry(
+            entry.configure(validate="key", validatecommand=(self.register(_validate_numeric), '%P'))
+            entry.bind("<FocusOut>", bind_command)
+
+            return label, entry
+
+        # DARK THRESHOLD
+        self.dark_threshold_label, self.dark_threshold_entry = create_param_entry(
             self.sliders_frame,
-            textvariable=self.iterations_var,
-            fg_color="white",
-            text_color="black"
+            f"Threshold Escuro: {self.dark_threshold}",
+            self.dark_threshold_var,
+            self._on_dark_threshold_change
         )
-        self.iterations_entry.pack(fill="x", pady=10)
-        self.iterations_label = ctk.CTkLabel(self.sliders_frame, text=f"Iterations: {self.morph_iterations}")
-        self.iterations_label.pack()
-        self.iterations_entry.configure(validate="key", validatecommand=(self.register(_validate_numeric), '%P'))
-        self.iterations_entry.bind("<FocusOut>", self._on_iterations_change)
 
-        # --- MIN DEFECT AREA ENTRY ---
-        self.min_defect_area_var = ctk.StringVar(value=str(self.min_defect_area))
-        self.min_defect_area_entry = ctk.CTkEntry(self.sliders_frame,
-                                                  textvariable=self.min_defect_area_var,
-                                                  fg_color="white",
-                                                  text_color= "black")
-        self.min_defect_area_entry.pack(fill="x", pady=10)
-        self.min_defect_area_label = ctk.CTkLabel(self.sliders_frame,
-                                                  text=f"Tamanho mín. defeito: {self.min_defect_area}")
-        self.min_defect_area_label.pack()
-        self.min_defect_area_entry.configure(validate="key",
-                                             validatecommand=(self.register(_validate_numeric), '%P'))
-        self.min_defect_area_entry.bind("<FocusOut>", self._on_min_defect_area_change)
+        # BRIGHT/YELLOW THRESHOLD
+        self.bright_threshold_label, self.bright_threshold_entry = create_param_entry(
+            self.sliders_frame,
+            f"Threshold Amarelo: {self.bright_threshold}", # Label changed for clarity
+            self.bright_threshold_var,
+            self._on_bright_threshold_change
+        )
+
+        # --- NEW: BLUE THRESHOLD ENTRY ---
+        self.blue_threshold_label, self.blue_threshold_entry = create_param_entry(
+            self.sliders_frame,
+            f"Threshold Azul: {self.blue_threshold}",
+            self.blue_threshold_var,
+            self._on_blue_threshold_change
+        )
+
+        # --- NEW: RED THRESHOLD ENTRY ---
+        self.red_threshold_label, self.red_threshold_entry = create_param_entry(
+            self.sliders_frame,
+            f"Threshold Vermelho: {self.red_threshold}",
+            self.red_threshold_var,
+            self._on_red_threshold_change
+        )
+
+        # DARK MORPH KERNEL SIZE
+        self.dark_kernel_label, self.dark_kernel_entry = create_param_entry(
+            self.sliders_frame,
+            f"Kernel Escuro: {self.dark_morph_kernel_size}",
+            self.dark_kernel_var,
+            self._on_dark_kernel_change
+        )
+
+        # DARK MORPH ITERATIONS
+        self.dark_iterations_label, self.dark_iterations_entry = create_param_entry(
+            self.sliders_frame,
+            f"Iterações Escuro: {self.dark_morph_iterations}",
+            self.dark_iterations_var,
+            self._on_dark_iterations_change
+        )
+
+        # BRIGHT MORPH KERNEL SIZE (applied to all color defects)
+        self.bright_kernel_label, self.bright_kernel_entry = create_param_entry(
+            self.sliders_frame,
+            f"Kernel Colorido: {self.bright_morph_kernel_size}", # Label changed for clarity
+            self.bright_kernel_var,
+            self._on_bright_kernel_change
+        )
+
+        # BRIGHT MORPH ITERATIONS (applied to all color defects)
+        self.bright_iterations_label, self.bright_iterations_entry = create_param_entry(
+            self.sliders_frame,
+            f"Iterações Colorido: {self.bright_morph_iterations}", # Label changed for clarity
+            self.bright_iterations_var,
+            self._on_bright_iterations_change
+        )
+
+        # Dark Gradient Threshold Entry
+        self.dark_gradient_threshold_label, self.dark_gradient_threshold_entry = create_param_entry(
+            self.sliders_frame,
+            f"Gradiente Escuro: {self.dark_gradient_threshold}",
+            self.dark_gradient_threshold_var,
+            self._on_dark_gradient_threshold_change
+        )
+
+        # MIN DEFECT AREA
+        self.min_defect_area_label, self.min_defect_area_entry = create_param_entry(
+            self.sliders_frame,
+            f"Tamanho mín. defeito: {self.min_defect_area}",
+            self.min_defect_area_var,
+            self._on_min_defect_area_change
+        )
 
         # Botões e switches continuam iguais
-
         self.btn_defects = ctk.CTkButton(
             self.left_panel, text="Mostrar Defeitos",
             command=self._show_defects
         )
         self.btn_defects.pack(pady=5)
 
-        self.show_contours_var = ctk.BooleanVar(value=True)
+        # The toggle_contours switch and its variable are already correctly placed in __init__
         self.toggle_contours = ctk.CTkSwitch(
             self.left_panel,
             text="Mostrar Contornos dos Defeitos",
-            variable=self.show_contours_var,
+            variable=self.show_contours_var, # This variable is already initialized in __init__
             command=self._toggle_defect_contours,
         )
-
         self.toggle_contours.pack(pady=10)
 
-
         # DefeitosInfo
-        self.total_defects_var = ctk.StringVar(value="0")
-        self.total_defects_entry = ctk.CTkEntry(self.sliders_frame, textvariable=self.total_defects_var,
-                                                state="readonly")
-        self.total_defects_entry.pack(pady=25)
-        self.total_defects_count_label = ctk.CTkLabel(self.sliders_frame,                                      text="Total de defeitos")
-        self.total_defects_count_label.pack(pady=5)
+        # The total_defects_var is also initialized in __init__
+        frame_td = ctk.CTkFrame(self.sliders_frame, fg_color="transparent")  # Use transparent frame
+        frame_td.pack(fill="x", pady=25)  # Pack this horizontal pair frame vertically
+        self.total_defects_count_label = ctk.CTkLabel(frame_td, text="Total de defeitos")
+        self.total_defects_count_label.pack(side="left", padx=(0, 10))
+        self.total_defects_entry = ctk.CTkEntry(frame_td, textvariable=self.total_defects_var,
+                                                state="readonly", width=50, text_color="red")
+        self.total_defects_entry.pack(side="right")
 
 
         # Área da imagem à direita
@@ -220,13 +292,20 @@ class InspectionWindow(ctk.CTkToplevel):
 
         self.lbl_img = ctk.CTkLabel(self.frame_img, text="")
         self.lbl_img.bind("<Motion>", self.on_mouse_move)
-        self.lbl_img.bind("<Leave>", self.on_mouse_leave)  # para esconder tooltip ao sair
 
         self.lbl_img.pack(padx=2, pady=2)
 
+        # painel direita
+        self.right_panel = ctk.CTkFrame(self)
+        self.right_panel.pack(side="right", fill="y", expand=True, padx=10, pady=10, )
+
+        # Criar o CTkTextbox antes de o configurar
+        self.area_info_textbox = ctk.CTkTextbox(self.right_panel, height=200, width=200)
+        self.area_info_textbox.pack(pady=10)
+
         # Criar tooltip para mostrar diferença no mouse
-        self.tooltip = ctk.CTkLabel(self.frame_img, text="", bg_color="gray80")
-        self.tooltip.place_forget()
+        self.tooltip_img = ctk.CTkLabel(self.right_panel, text="", width= 100, height=100)
+        self.tooltip_img.pack(pady=10)
 
         # Preparação das imagens
         self.tk_template = _prepare_image_grayscale(self.template_masked, s)
@@ -244,62 +323,32 @@ class InspectionWindow(ctk.CTkToplevel):
         self.resizable(False, False)
 
     def _toggle_defect_contours(self):
-        # Ler o estado via variável associada, não pelo switch direto
         self.show_defect_contours = self.show_contours_var.get()
         self._update_defect_image()
 
-    def _detect_defects(self, tpl, aligned, mask):
-        start_time = time.time()  # marca início
-
-        # --- teu código original ---
-        t_gray = cv2.cvtColor(tpl, cv2.COLOR_BGR2GRAY)
-        a_gray = cv2.cvtColor(aligned, cv2.COLOR_BGR2GRAY)
-
-        t_gray_eq = cv2.equalizeHist(t_gray)
-        a_gray_eq = cv2.equalizeHist(a_gray)
-
-        diff = cv2.subtract(t_gray_eq, a_gray_eq)  # defeitos escuros
-
-        tpl_lab = cv2.cvtColor(tpl, cv2.COLOR_BGR2LAB)
-        aligned_lab = cv2.cvtColor(aligned, cv2.COLOR_BGR2LAB)
-
-        tpl_b = tpl_lab[:, :, 2]
-        aligned_b = aligned_lab[:, :, 2]
-
-        diff_b = cv2.subtract(aligned_b, tpl_b)
-
-        _, yellow_mask = cv2.threshold(diff_b, self.bright_threshold, 255, cv2.THRESH_BINARY)
-        _, darker_mask = cv2.threshold(diff, self.dark_threshold, 255, cv2.THRESH_BINARY)
-
-        combined = cv2.bitwise_or(darker_mask, yellow_mask)
-
-        k = np.ones((self.morph_kernel_size, self.morph_kernel_size), np.uint8)
-        clean = cv2.morphologyEx(combined, cv2.MORPH_OPEN, k, iterations=self.morph_iterations)
-        clean = cv2.morphologyEx(clean, cv2.MORPH_CLOSE, k, iterations=self.morph_iterations)
-
-        clean_masked = cv2.bitwise_and(clean, clean, mask=mask)
-
-        contours, _ = cv2.findContours(clean_masked, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        filtered_contours = [cnt for cnt in contours if cv2.contourArea(cnt) >= self.min_defect_area]
-
-        end_time = time.time()  # marca fim
-
-        print(f"_detect_defects demorou {end_time - start_time:.4f} segundos")
-
-        return clean_masked, filtered_contours
-
     def _recalculate_defects(self):
-
-        self.defect_mask, self.defect_contours = self._detect_defects(
+        # --- UPDATED CALL TO DETECT_DEFECTS ---
+        self.defect_mask, self.defect_contours, \
+        self.darker_mask_filtered, self.yellow_mask, \
+        self.blue_mask, self.red_mask = detect_defects( # <-- NEW RETURN VALUES
             self.template_masked,
             self.current_masked,
-            self.mask_full
+            self.mask_full,
+            self.dark_threshold,
+            self.bright_threshold,
+            self.dark_morph_kernel_size,
+            self.dark_morph_iterations,
+            self.bright_morph_kernel_size,
+            self.bright_morph_iterations,
+            self.min_defect_area,
+            self.dark_gradient_threshold,
+            self.blue_threshold, # <-- NEW
+            self.red_threshold   # <-- NEW
         )
         self._update_defect_image()
 
     def _update_defect_image(self):
-        start_time = time.time()  # marca início
+        start_time = time.time()
         s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
         self.total_defects_var.set(str(len(self.defect_contours)))
 
@@ -313,7 +362,7 @@ class InspectionWindow(ctk.CTkToplevel):
         self.lbl_img.configure(image=self.tk_defect)
         self.lbl_img.image = self.tk_defect
 
-        end_time = time.time()  # marca fim
+        end_time = time.time()
 
         print(f"_detect_defects demorou {end_time - start_time:.4f} segundos")
 
@@ -327,83 +376,168 @@ class InspectionWindow(ctk.CTkToplevel):
         if lbl_w == 0 or lbl_h == 0:
             return
 
-        # Converte coordenadas para a imagem original
         img_x = int(x * img_w / lbl_w)
         img_y = int(y * img_h / lbl_h)
 
-        # Limita área 10x10
-        x1 = max(img_x - 25, 0)
-        y1 = max(img_y - 25, 0)
-        x2 = min(img_x + 25, img_w)
-        y2 = min(img_y + 25, img_h)
+        # Limita área 50x50 para zoom
+        x1 = max(img_x - 10, 0)
+        y1 = max(img_y - 10, 0)
+        x2 = min(img_x + 10, img_w)
+        y2 = min(img_y + 10, img_h)
 
+        # Converte imagens para grayscale
         tpl_gray = cv2.cvtColor(self.template_full, cv2.COLOR_BGR2GRAY)
         cur_gray = cv2.cvtColor(self.current_full, cv2.COLOR_BGR2GRAY)
 
         region_tpl = tpl_gray[y1:y2, x1:x2]
         region_cur = cur_gray[y1:y2, x1:x2]
 
-        diff = np.mean(np.abs(region_tpl.astype(np.int16) - region_cur.astype(np.int16)))
+        # Point values
+        tpl_gray_val = int(tpl_gray[img_y, img_x])
+        cur_gray_val = int(cur_gray[img_y, img_x])
+        dark_diff_val = tpl_gray_val - cur_gray_val # Difference for darker defects
 
-        # Cria imagem em zoom (100x100) da região atual
-        zoom_img = cv2.resize(region_cur, (50, 50), interpolation=cv2.INTER_NEAREST)
+        tpl_lab = cv2.cvtColor(self.template_full, cv2.COLOR_BGR2LAB)
+        cur_lab = cv2.cvtColor(self.current_full, cv2.COLOR_BGR2LAB)
+        tpl_a_val = int(tpl_lab[img_y, img_x, 1]) # A channel value
+        cur_a_val = int(cur_lab[img_y, img_x, 1])
+        tpl_b_val = int(tpl_lab[img_y, img_x, 2]) # B channel value
+        cur_b_val = int(cur_lab[img_y, img_x, 2])
+
+        # Differences for tooltip display
+        yellow_diff = cur_b_val - tpl_b_val # Positive if more yellow
+        blue_diff = tpl_b_val - cur_b_val   # Positive if more blue (template B > current B)
+        red_diff = cur_a_val - tpl_a_val    # Positive if more red (current A > template A)
+
+
+        # Valor da máscara geral
+        mask_val = self.mask_full[img_y, img_x]
+
+        # Intermediate masks for debugging/info
+        try:
+            darker_mask_val = self.darker_mask_filtered[img_y, img_x]
+            yellow_mask_val = self.yellow_mask[img_y, img_x] # Renamed from bright_mask_val for clarity
+            blue_mask_val = self.blue_mask[img_y, img_x]     # <-- NEW
+            red_mask_val = self.red_mask[img_y, img_x]       # <-- NEW
+        except AttributeError: # Handles initial state before masks are fully processed
+            darker_mask_val = "-"
+            yellow_mask_val = "-"
+            blue_mask_val = "-"
+            red_mask_val = "-"
+
+
+        # Prepara imagem em zoom
+        zoom_img = cv2.resize(region_cur, (80, 80), interpolation=cv2.INTER_NEAREST)
         zoom_img_rgb = cv2.cvtColor(zoom_img, cv2.COLOR_GRAY2RGB)
         pil_img = Image.fromarray(zoom_img_rgb)
         self.zoom_imgtk = ImageTk.PhotoImage(pil_img)
 
-        # Cria tooltip visual se não existir
-        if not hasattr(self, 'tooltip_img'):
-            self.tooltip_img = ctk.CTkLabel(self.frame_img, text="")
-            self.tooltip_img.configure(image=self.zoom_imgtk)
-            self.tooltip_img.image = self.zoom_imgtk  # evita garbage collection
-            self.tooltip_img.place(x=x + 15, y=y - 120)
+        self.tooltip_img.configure(image=self.zoom_imgtk)
+        self.tooltip_img.image = self.zoom_imgtk
 
-            self.tooltip = ctk.CTkLabel(self.frame_img, text="", text_color="black", bg_color="gray80")
-            self.tooltip.place(x=x + 15, y=y - 15)
-        else:
-            self.tooltip_img.configure(image=self.zoom_imgtk)
-            self.tooltip_img.image = self.zoom_imgtk
-            self.tooltip_img.place(x=x + 15, y=y - 120)
+        # Text detail, updated to reflect current state
+        text = (
+            f"Coords: ({img_x},{img_y})\n"
+            f"Máscara Ativa: {mask_val}\n"
+            f"Pix (T,C): ({tpl_gray_val},{cur_gray_val}) Δ={dark_diff_val}\n"
+            f"LAB A (T,C): ({tpl_a_val},{cur_a_val}) Δ={red_diff} (Vermelho)\n" # <-- NEW LAB A info
+            f"LAB B (T,C): ({tpl_b_val},{cur_b_val}) Δ={yellow_diff} (Amarelo)\n" # <-- Updated LAB B for yellow
+            f"                  Δ={blue_diff} (Azul)\n" # <-- New LAB B info for blue
+            f"Th Escuro: {self.dark_threshold} (Mask={darker_mask_val})\n"
+            f"Th Amarelo: {self.bright_threshold} (Mask={yellow_mask_val})\n" # <-- Updated Label
+            f"Th Azul: {self.blue_threshold} (Mask={blue_mask_val})\n"         # <-- NEW
+            f"Th Vermelho: {self.red_threshold} (Mask={red_mask_val})\n"     # <-- NEW
+            f"K/It Escuro: {self.dark_morph_kernel_size}/{self.dark_morph_iterations}\n"
+            f"K/It Colorido: {self.bright_morph_kernel_size}/{self.bright_morph_iterations}\n" # <-- Updated Label
+            f"Gradiente Escuro: {self.dark_gradient_threshold}\n"
+            f"Área mín: {self.min_defect_area}"
+        )
+        self.area_info_textbox.configure(state="normal")
+        self.area_info_textbox.delete("0.0", "end")
+        self.area_info_textbox.insert("0.0", text)
+        self.area_info_textbox.configure(state="disabled")
 
-            self.tooltip.configure(text=f"Diferença: {diff:.2f}")
-            self.tooltip.place(x=x + 15, y=y - 15)
-
-    def on_mouse_leave(self, event):
-        self.tooltip.place_forget()
-
-    def _on_kernel_change(self, event):
-        val = self.kernel_var.get()
+    # --- NEW: Separate Change Handlers for Dark Morphology ---
+    def _on_dark_kernel_change(self, event):
+        val = self.dark_kernel_var.get()
         if val != "":
             k = int(val)
-            if k % 2 == 0:
-                k += 1
-            k = max(1, min(k, 15))
-            self.morph_kernel_size = k
-            self.kernel_label.configure(text=f"Kernel Size: {self.morph_kernel_size}")
+            # The actual kernel size correction is now done inside detect_defects
+            k = max(1, min(k, 15)) # Clamp value
+            self.dark_morph_kernel_size = k
+            self.dark_kernel_label.configure(text=f"Kernel Escuro: {self.dark_morph_kernel_size}")
             self._recalculate_defects()
             self._save_params()
-            # Atualiza texto da entry se o valor mudou
             if str(k) != val:
-                self.kernel_var.set(str(k))
+                self.dark_kernel_var.set(str(k)) # Update entry if value was clamped
 
-    def _on_iterations_change(self, event):
-        val = self.iterations_var.get()
+    def _on_blue_threshold_change(self, event):
+        val = self.blue_threshold_var.get()
+        if val != "":
+            self.blue_threshold = int(val)
+            self.blue_threshold_label.configure(text=f"Threshold Azul: {self.blue_threshold}")
+            self._recalculate_defects()
+            self._save_params()
+
+    def _on_red_threshold_change(self, event):
+        val = self.red_threshold_var.get()
+        if val != "":
+            self.red_threshold = int(val)
+            self.red_threshold_label.configure(text=f"Threshold Vermelho: {self.red_threshold}")
+            self._recalculate_defects()
+            self._save_params()
+
+    def _on_dark_iterations_change(self, event):
+        val = self.dark_iterations_var.get()
         if val != "":
             i = int(val)
-            i = max(1, min(i, 10))
-            self.morph_iterations = i
-            self.iterations_label.configure(text=f"Iterations: {self.morph_iterations}")
+            i = max(1, min(i, 10)) # Clamp value
+            self.dark_morph_iterations = i
+            self.dark_iterations_label.configure(text=f"Iterações Escuro: {self.dark_morph_iterations}")
             self._recalculate_defects()
             self._save_params()
             if str(i) != val:
-                self.iterations_var.set(str(i))
+                self.dark_iterations_var.set(str(i))
 
-    # funções que atualizam os parâmetros e recalculam defeitos
+    # --- NEW: Separate Change Handlers for Bright Morphology ---
+    def _on_bright_kernel_change(self, event):
+        val = self.bright_kernel_var.get()
+        if val != "":
+            k = int(val)
+            # The actual kernel size correction is now done inside detect_defects
+            k = max(1, min(k, 15)) # Clamp value
+            self.bright_morph_kernel_size = k
+            self.bright_kernel_label.configure(text=f"Kernel Claro: {self.bright_morph_kernel_size}")
+            self._recalculate_defects()
+            self._save_params()
+            if str(k) != val:
+                self.bright_kernel_var.set(str(k))
+
+    def _on_bright_iterations_change(self, event):
+        val = self.bright_iterations_var.get()
+        if val != "":
+            i = int(val)
+            i = max(1, min(i, 10)) # Clamp value
+            self.bright_morph_iterations = i
+            self.bright_iterations_label.configure(text=f"Iterações Claro: {self.bright_morph_iterations}")
+            self._recalculate_defects()
+            self._save_params()
+            if str(i) != val:
+                self.bright_iterations_var.set(str(i))
+
+    # Existing change handlers for thresholds and min_defect_area
     def _on_dark_threshold_change(self, event):
         val = self.dark_threshold_var.get()
         if val != "":
             self.dark_threshold = int(val)
             self.dark_threshold_label.configure(text=f"Threshold Escuro: {self.dark_threshold}")
+            self._recalculate_defects()
+            self._save_params()
+    def _on_dark_gradient_threshold_change(self, event):
+        val = self.dark_gradient_threshold_var.get()
+        if val != "":
+            self.dark_gradient_threshold = int(val)
+            self.dark_gradient_threshold.configure(text=f"Gradient Threshold Escuro: {self.dark_gradient_threshold}")
             self._recalculate_defects()
             self._save_params()
 
@@ -423,24 +557,16 @@ class InspectionWindow(ctk.CTkToplevel):
             self._recalculate_defects()
             self._save_params()
 
-
-
     def _toggle_image(self):
         if self.toggle.get():
-            # Mostrar template com máscara
             self.lbl_img.configure(image=self.tk_template)
             self.lbl_img.image = self.tk_template
         else:
-            # Mostrar imagem atual ALINHADA com máscara
             self.lbl_img.configure(image=self.tk_aligned)
             self.lbl_img.image = self.tk_aligned
 
-
     def _show_defects(self):
-        #self.defects_info()
         self.total_defects_var.set(str(len(self.defect_contours)))
-
-
         self.lbl_img.configure(image=self.tk_defect)
         self.lbl_img.image = self.tk_defect
 
@@ -448,11 +574,14 @@ class InspectionWindow(ctk.CTkToplevel):
         params = {
             "dark_threshold": self.dark_threshold,
             "bright_threshold": self.bright_threshold,
-            "morph_kernel_size": self.morph_kernel_size,
-            "morph_iterations": self.morph_iterations,
-            "detect_area": int(self.min_defect_area_var.get())
+            "blue_threshold": self.blue_threshold, # <-- NEW
+            "red_threshold": self.red_threshold,   # <-- NEW
+            "dark_morph_kernel_size": self.dark_morph_kernel_size,
+            "dark_morph_iterations": self.dark_morph_iterations,
+            "bright_morph_kernel_size": self.bright_morph_kernel_size,
+            "bright_morph_iterations": self.bright_morph_iterations,
+            "dark_gradient_threshold": self.dark_gradient_threshold,
+            "detect_area": self.min_defect_area
         }
         with open(self.param_path, "w") as f:
             json.dump(params, f, indent=4)
-
-
