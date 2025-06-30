@@ -12,6 +12,7 @@ from config.config import INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT
 from config.utils import load_inspection_params
 from models.align_image import align_with_template
 from models.defect_detector import detect_defects # Already there, good!
+from widgets.param_entry_hor import create_param_entry
 
 
 def _prepare_image(img_cv, size, draw_contours=None):
@@ -158,25 +159,6 @@ class InspectionWindow(ctk.CTkToplevel):
 
         self.sliders_frame = ctk.CTkFrame(self.left_panel)
         self.sliders_frame.pack(fill="x", pady=10)
-
-        def create_param_entry(parent_frame, label_text, var_obj, bind_command):
-            frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
-            frame.pack(fill="x", pady=5)
-
-            label = ctk.CTkLabel(frame, text=label_text)
-            label.pack(side="left", padx=(0, 10))
-
-            entry = ctk.CTkEntry(frame,
-                                 textvariable=var_obj,
-                                 fg_color="white",
-                                 text_color="black",
-                                 width=50)
-            entry.pack(side="right")
-
-            entry.configure(validate="key", validatecommand=(self.register(_validate_numeric), '%P'))
-            entry.bind("<FocusOut>", bind_command)
-
-            return label, entry
 
         # DARK THRESHOLD
         self.dark_threshold_label, self.dark_threshold_entry = create_param_entry(

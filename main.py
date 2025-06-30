@@ -2,6 +2,7 @@ import customtkinter as ctk
 
 from windows.adjust_positions import AdjustPositionsWindow
 from windows.alignment_adjust import AlignmentWindow
+from windows.camera_angle_checker_window import CameraAngleCheckerWindow
 from windows.create_leaf_mask import LeafMaskCreator
 from windows.gallery import GalleryWindow
 from windows.inspection_window import InspectionWindow
@@ -63,6 +64,10 @@ class App(ctk.CTk):
             command=self.open_alignment_adjust_window, width=200)
         self.alignment_adjust_window_button.pack(pady=(0, 10), anchor="center")
 
+        self.angle_checker_window_button = ctk.CTkButton(self.middle_frame, text="↔️ Check Angle",
+                                                            command=self.open_angle_checker_window, width=200)
+        self.angle_checker_window_button.pack(pady=(0, 10), anchor="center")
+
         # --- Coluna da direita (coluna 2) ---
         self.right_frame = ctk.CTkFrame(self.main_frame)
         self.right_frame.grid(row=0, column=2, sticky="nsew", pady=20, padx=20)
@@ -93,6 +98,11 @@ class App(ctk.CTk):
         self.gallery_window = GalleryWindow(self)
         self.gallery_window.protocol("WM_DELETE_WINDOW", self.on_gallery_close)
 
+    def open_angle_checker_window(self):
+        self.withdraw()  # Esconde a janela principal
+        self.angle_ckecker_window = CameraAngleCheckerWindow(parent=self, image_path="data/raw/fba_actual.jpg")
+        self.angle_ckecker_window.protocol("WM_DELETE_WINDOW", self.on_angle_ckecker_window_close)
+
     def on_gallery_close(self):
         self.gallery_window.destroy()
         self.deiconify()  # Mostra a janela principal de novo
@@ -104,6 +114,10 @@ class App(ctk.CTk):
         current_path = "data/raw/fba_actual.jpg"
         self.inspection_window = InspectionWindow(self, template_path, current_path, mask_path)
         self.inspection_window.protocol("WM_DELETE_WINDOW", self.on_inspection_close)
+
+    def on_angle_ckecker_window_close(self):
+        self.angle_ckecker_window.destroy()
+        self.deiconify()  # Mostra a janela principal de novo
 
     def on_inspection_close(self):
         self.inspection_window.destroy()
