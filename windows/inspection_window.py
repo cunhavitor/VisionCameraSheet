@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageTk
 from customtkinter import CTkImage
 
 from config.config import INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT
-from config.utils import load_inspection_params
+from config.utils import load_params
 from models.align_image import align_with_template
 from models.defect_detector import detect_defects # Already there, good!
 from widgets.param_entry_hor import create_param_entry
@@ -76,7 +76,7 @@ class InspectionWindow(ctk.CTkToplevel):
 
         # parameters adjustable (default values)
         self.param_path = "config/inspection_params.json"
-        params = load_inspection_params(self.param_path)
+        params = load_params(self.param_path)
 
         self.dark_threshold = params.get("dark_threshold", 30)
         self.bright_threshold = params.get("bright_threshold", 30)
