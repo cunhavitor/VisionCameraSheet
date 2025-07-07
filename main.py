@@ -4,13 +4,17 @@ from windows.adjust_positions import AdjustPositionsWindow
 from windows.alignment_adjust import AlignmentWindow
 from windows.camera_adjust_positions import CameraAdjustPosition
 from windows.create_leaf_mask import LeafMaskCreator
+from windows.create_users import NewUserWindow
+from windows.detect_cans_auto import AutoDetectCans
 from windows.gallery import GalleryWindow
 from windows.inspection_window import InspectionWindow
+from windows.login_window import LoginWindow
 
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.auto_can_detect_cans_window = None
         self.cap = None
         self.preview_running = None
         self.alignment_adjust_window = None
@@ -29,7 +33,6 @@ class App(ctk.CTk):
         self.main_frame.grid_columnconfigure((0, 1, 2), weight=1)  # 3 colunas com distribuição igual
 
         # --- Botões à esquerda (coluna 0) ---
-
         self.user_frame = ctk.CTkFrame(self.main_frame)
         self.user_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
         self.user_frame.grid_propagate(False)
@@ -38,10 +41,10 @@ class App(ctk.CTk):
             text_color="white", font=("Arial", 20))
         self.status_label.pack(side="top", pady=10)
 
-        self.login_button = ctk.CTkButton(self.user_frame, text="Login", width=200)
+        self.login_button = ctk.CTkButton(self.user_frame, text="Login", width=200, command=self.open_login_window)
         self.login_button.pack(pady=(10, 10), anchor="center")
 
-        self.new_user_button = ctk.CTkButton(self.user_frame, text="Novo User", width=200)
+        self.new_user_button = ctk.CTkButton(self.user_frame, text="Novo User", width=200, command=self.open_new_user_window)
         self.new_user_button.pack(pady=(0, 10), anchor="center")
 
         # --- Coluna do meio (coluna 1) ---
@@ -64,9 +67,13 @@ class App(ctk.CTk):
             command=self.open_alignment_adjust_window, width=200)
         self.alignment_adjust_window_button.pack(pady=(0, 10), anchor="center")
 
-        self.angle_checker_window_button = ctk.CTkButton(self.middle_frame, text="📐 Check Camera Positions",
+        self.check_camera_psotion_button = ctk.CTkButton(self.middle_frame, text="📐 Check Camera Positions",
                                                          command=self.open_check_camera_position_window, width=200)
-        self.angle_checker_window_button.pack(pady=(0, 10), anchor="center")
+        self.check_camera_psotion_button.pack(pady=(0, 10), anchor="center")
+
+        self.auto_detect_cans_button = ctk.CTkButton(self.middle_frame, text="📐 Check Camera Positions",
+                                                         command=self.open_auto_detect_cans_window, width=200)
+        self.auto_detect_cans_button.pack(pady=(0, 10), anchor="center")
 
         # --- Coluna da direita (coluna 2) ---
         self.right_frame = ctk.CTkFrame(self.main_frame)
@@ -84,6 +91,14 @@ class App(ctk.CTk):
             width=200)
         self.inspect_button.pack(pady=(0, 10), anchor="center")
 
+        self.new_user_button.configure(state="disabled")
+        self.gallery_button.configure(state="disabled")
+        self.adjust_positions_button.configure(state="disabled")
+        self.mask_window_button.configure(state="disabled")
+        self.alignment_adjust_window_button.configure(state="disabled")
+        self.check_camera_psotion_button.configure(state="disabled")
+        self.auto_detect_cans_button.configure(state="disabled")
+
     def open_adjust_positions(self):
         self.withdraw()  # Esconde a janela principal
         self.adjust_window = AdjustPositionsWindow(self)
@@ -100,8 +115,63 @@ class App(ctk.CTk):
 
     def open_check_camera_position_window(self):
         self.withdraw()  # Esconde a janela principal
-        self.angle_ckecker_window = CameraAdjustPosition(parent=self, image_path="data/raw/fba_template_persp.jpg")
-        self.angle_ckecker_window.protocol("WM_DELETE_WINDOW", self.on_check_camera_position_window_close)
+        self.check_camera_position_window = CameraAdjustPosition(parent=self, image_path="data/raw/fba_template_persp.jpg")
+        self.check_camera_position_window.protocol("WM_DELETE_WINDOW", self.on_check_camera_position_window_close)
+
+    def open_auto_detect_cans_window(self):
+        self.withdraw()  # Esconde a janela principal
+        self.auto_can_detect_cans_window = AutoDetectCans(parent=self, image_path="data/raw/fba_template_persp.jpg")
+        self.auto_can_detect_cans_window.protocol("WM_DELETE_WINDOW", self.on_auto_detect_cans_window_close)
+
+    def open_login_window(self):
+        self.withdraw()  # Esconde a janela principal
+        self.login_window = LoginWindow(parent=self,on_login_callback=self.on_login_sucesso)
+        self.login_window.protocol("WM_DELETE_WINDOW", self.on_login_window_close)
+
+    def on_login_sucesso(self, username, user_type):
+        self.user_type = user_type
+        self.login_window.destroy()
+        self.deiconify()
+        self._atualizar_acessos()
+
+    def _atualizar_acessos(self):
+        if self.user_type == "User":
+            self.new_user_button.configure(state="disabled")
+            self.gallery_button.configure(state="disabled")
+            self.adjust_positions_button.configure(state="disabled")
+            self.mask_window_button.configure(state="disabled")
+            self.alignment_adjust_window_button.configure(state="disabled")
+            self.check_camera_psotion_button.configure(state="disabled")
+            self.auto_detect_cans_button.configure(state="disabled")
+
+        elif self.user_type == "Admin":
+            self.new_user_button.configure(state="normal")
+            self.gallery_button.configure(state="normal")
+            self.adjust_positions_button.configure(state="normal")
+            self.mask_window_button.configure(state="normal")
+            self.alignment_adjust_window_button.configure(state="normal")
+
+        elif self.user_type == "SuperAdmin":
+            self.new_user_button.configure(state="normal")
+            self.gallery_button.configure(state="normal")
+            self.adjust_positions_button.configure(state="normal")
+            self.mask_window_button.configure(state="normal")
+            self.alignment_adjust_window_button.configure(state="normal")
+            self.check_camera_psotion_button.configure(state="normal")
+            self.auto_detect_cans_button.configure(state="normal")
+
+    def on_login_window_close(self):
+        self.deiconify()  # Mostra a janela principal de novo
+        self.login_window.destroy()
+
+    def open_new_user_window(self):
+        self.withdraw()  # Esconde a janela principal
+        self.new_user_window = NewUserWindow(parent=self, users_file="config/users.json")
+        self.new_user_window.protocol("WM_DELETE_WINDOW", self.on_new_user_window_close)
+
+    def on_new_user_window_close(self):
+        self.deiconify()  # Mostra a janela principal de novo
+        self.new_user_window.destroy()
 
     def on_gallery_close(self):
         self.gallery_window.destroy()
@@ -116,7 +186,11 @@ class App(ctk.CTk):
         self.inspection_window.protocol("WM_DELETE_WINDOW", self.on_inspection_close)
 
     def on_check_camera_position_window_close(self):
-        self.angle_ckecker_window.destroy()
+        self.auto_can_detect_cans_window.destroy()
+        self.deiconify()  # Mostra a janela principal de novo
+
+    def on_auto_detect_cans_window_close(self):
+        self.auto_can_detect_cans_window.destroy()
         self.deiconify()  # Mostra a janela principal de novo
 
     def on_inspection_close(self):

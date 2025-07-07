@@ -1,6 +1,5 @@
-import json
+
 import os
-import re
 
 from PIL import Image, ImageDraw, ImageTk
 import customtkinter as ctk
@@ -164,3 +163,4 @@ class AdjustPositionsWindow(ctk.CTkToplevel):
 
     def destroy(self):
         super().destroy()
+
