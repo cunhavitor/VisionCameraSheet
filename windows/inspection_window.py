@@ -1,7 +1,8 @@
 import json
 import time
 from tkinter import StringVar
-
+import os
+from shapely.geometry import Polygon, Point
 import customtkinter as ctk
 import cv2
 import numpy as np
@@ -144,6 +145,8 @@ class InspectionWindow(ctk.CTkToplevel):
         # 5) Setup UI
         self._setup_ui()
 
+        self._analisar_latas_com_defeito()
+
     # --- _setup_ui method (remains mostly as you had it, no changes needed inside it anymore) ---
     def _setup_ui(self):
         s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
@@ -266,6 +269,11 @@ class InspectionWindow(ctk.CTkToplevel):
                                                 state="readonly", width=50, text_color="red")
         self.total_defects_entry.pack(side="right")
 
+        self.label_info = ctk.CTkLabel(self.sliders_frame,
+                                       text="Total de defeitos\n(verificados)",
+                                       justify="left",
+                                       width=100)
+        self.label_info.pack(side="left", padx=(0, 10))
 
         # Área da imagem à direita
         self.frame_img = ctk.CTkFrame(self, width=s[0] + 4, height=s[1] + 4, fg_color="gray80")
@@ -328,6 +336,72 @@ class InspectionWindow(ctk.CTkToplevel):
             self.red_threshold   # <-- NEW
         )
         self._update_defect_image()
+
+    def _analisar_latas_com_defeito(self):
+        # Carrega forma base
+        try:
+            with open("data/mask/forma_base.json", "r") as f:
+                forma_base = json.load(f)  # lista de [x, y]
+        except:
+            print("❌ Erro ao carregar forma base.")
+            return
+
+        # Carrega instâncias
+        instancias = []
+        try:
+            with open("data/mask/instancias_poligonos.txt", "r") as f:
+                for line in f:
+                    parts = line.strip().split(":")
+                    if len(parts) != 2:
+                        continue
+                    idx, rest = parts
+                    cx, cy, s, numero_lata = rest.split(",")
+                    instancias.append({
+                        "center": (int(cx), int(cy)),
+                        "scale": float(s),
+                        "numero_lata": int(numero_lata)
+                    })
+        except:
+            print("❌ Erro ao carregar instâncias.")
+            return
+
+        # Calcula os polígonos reais
+        poligonos = []
+        for inst in instancias:
+            cx, cy = inst["center"]
+            s = inst["scale"]
+            pontos = [(cx + x * s, cy + y * s) for x, y in forma_base]
+            poligonos.append({
+                "numero_lata": inst["numero_lata"],
+                "polygon": Polygon(pontos)
+            })
+
+        # Analisa defeitos
+        latas_com_defeito = set()
+        for cnt in self.defect_contours:
+            M = cv2.moments(cnt)
+            if M["m00"] == 0:
+                continue
+            cx = int(M["m10"] / M["m00"])
+            cy = int(M["m01"] / M["m00"])
+            ponto_defeito = Point(cx, cy)
+
+            for pol in poligonos:
+                if pol["polygon"].contains(ponto_defeito):
+                    latas_com_defeito.add(pol["numero_lata"])
+                    break
+
+        if latas_com_defeito:
+            texto = "⚠️ Latas com defeitos: " + ", ".join(str(n) for n in sorted(latas_com_defeito))
+        else:
+            texto = "✅ Nenhum defeito dentro das latas detectado."
+
+        self.label_info.configure(text=texto)
+
+        self.area_info_textbox.configure(state="normal")
+        self.area_info_textbox.insert("end", "\n\n" + texto)
+        self.area_info_textbox.configure(state="disabled")
+        print(texto)
 
     def _update_defect_image(self):
         start_time = time.time()
@@ -412,7 +486,7 @@ class InspectionWindow(ctk.CTkToplevel):
         zoom_img = cv2.resize(region_cur, (80, 80), interpolation=cv2.INTER_NEAREST)
         zoom_img_rgb = cv2.cvtColor(zoom_img, cv2.COLOR_GRAY2RGB)
         pil_img = Image.fromarray(zoom_img_rgb)
-        self.zoom_imgtk = ImageTk.PhotoImage(pil_img)
+        self.zoom_imgtk = CTkImage(light_image=pil_img, size=(80, 80))
 
         self.tooltip_img.configure(image=self.zoom_imgtk)
         self.tooltip_img.image = self.zoom_imgtk
