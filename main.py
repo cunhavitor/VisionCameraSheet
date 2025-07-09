@@ -1,5 +1,6 @@
 import customtkinter as ctk
 
+from config.utils import center_window
 from windows.adjust_positions import AdjustPositionsWindow
 from windows.alignment_adjust import AlignmentWindow
 from windows.camera_adjust_positions import CameraAdjustPosition
@@ -19,14 +20,13 @@ class App(ctk.CTk):
         self.preview_running = None
         self.alignment_adjust_window = None
         self.inspection_window = None
-        self.state("zoomed")
         self.mask_window = None
         self.gallery_window = None
         self.adjust_window = None
         self.title("Detection Lito Errors")
-        self.geometry("800x600")
+        center_window(self, 800, 600)
         ctk.set_appearance_mode("dark")
-
+        self.user_type=""
         # Layout principal
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
@@ -182,7 +182,7 @@ class App(ctk.CTk):
         mask_path = "data/mask/leaf_mask.png"
         template_path = "data/raw/fba_template.jpg"
         current_path = "data/raw/fba_actual.jpg"
-        self.inspection_window = InspectionWindow(self, template_path, current_path, mask_path)
+        self.inspection_window = InspectionWindow(self, template_path, current_path, mask_path, self.user_type)
         self.inspection_window.protocol("WM_DELETE_WINDOW", self.on_inspection_close)
 
     def on_check_camera_position_window_close(self):

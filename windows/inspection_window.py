@@ -12,8 +12,9 @@ from customtkinter import CTkImage
 from config.config import INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT
 from config.utils import load_params
 from models.align_image import align_with_template
-from models.defect_detector import detect_defects # Already there, good!
+from models.defect_detector import detect_defects
 from widgets.param_entry_hor import create_param_entry
+from windows.defect_tuner_window import DefectTunerWindow
 
 
 def _prepare_image(img_cv, size, draw_contours=None):
@@ -67,32 +68,33 @@ def _validate_numeric(value_if_allowed):
 
 
 class InspectionWindow(ctk.CTkToplevel):
-    def __init__(self, parent, template_path, current_path, mask_path):
+    def __init__(self, parent, template_path, current_path, mask_path, user_type="User"):
         super().__init__(parent)
+
+        self.template_path = template_path
+        self.current_path = current_path
+        self.mask_path = mask_path
 
         self.zoom_imgtk = None
         self.area_info_textbox = None
         self.state("zoomed")
         self.title("Janela de Inspeção")
+        self.user_type=user_type
 
         # parameters adjustable (default values)
         self.param_path = "config/inspection_params.json"
         params = load_params(self.param_path)
 
-        self.dark_threshold = params.get("dark_threshold", 30)
-        self.bright_threshold = params.get("bright_threshold", 30)
-
-        self.dark_morph_kernel_size = params.get("dark_morph_kernel_size", 3)
-        self.dark_morph_iterations = params.get("dark_morph_iterations", 1)
-        self.bright_morph_kernel_size = params.get("bright_morph_kernel_size", 3)
-        self.bright_morph_iterations = params.get("bright_morph_iterations", 1)
-
-        self.min_defect_area = params.get("detect_area", 1)
-        self.dark_gradient_threshold = params.get("dark_gradient_threshold", 10)
-
-        # --- NEW THRESHOLDS FOR COLOR DEFECTS ---
-        self.blue_threshold = params.get("blue_threshold", 25) # Default value for blue
-        self.red_threshold = params.get("red_threshold", 25)   # Default value for red
+        self.dark_threshold = int(params.get("dark_threshold", 30))
+        self.bright_threshold = int(params.get("bright_threshold", 30))
+        self.dark_morph_kernel_size = int(params.get("dark_morph_kernel_size", 3))
+        self.dark_morph_iterations = int(params.get("dark_morph_iterations", 1))
+        self.bright_morph_kernel_size = int(params.get("bright_morph_kernel_size", 3))
+        self.bright_morph_iterations = int(params.get("bright_morph_iterations", 1))
+        self.min_defect_area = int(params.get("detect_area", 1))
+        self.dark_gradient_threshold = int(params.get("dark_gradient_threshold", 10))
+        self.blue_threshold = int(params.get("blue_threshold", 25))
+        self.red_threshold = int(params.get("red_threshold", 25))
 
         # Initialize all StringVar and BooleanVar objects here
         self.dark_threshold_var = ctk.StringVar(value=str(self.dark_threshold))
@@ -145,7 +147,7 @@ class InspectionWindow(ctk.CTkToplevel):
         # 5) Setup UI
         self._setup_ui()
 
-        self._analisar_latas_com_defeito()
+
 
     # --- _setup_ui method (remains mostly as you had it, no changes needed inside it anymore) ---
     def _setup_ui(self):
@@ -162,78 +164,6 @@ class InspectionWindow(ctk.CTkToplevel):
 
         self.sliders_frame = ctk.CTkFrame(self.left_panel)
         self.sliders_frame.pack(fill="x", pady=10)
-
-        # DARK THRESHOLD
-        self.dark_threshold_label, self.dark_threshold_entry = create_param_entry(
-            self.sliders_frame,
-            f"Threshold Escuro: {self.dark_threshold}",
-            self.dark_threshold_var,
-            self._on_dark_threshold_change
-        )
-
-        # BRIGHT/YELLOW THRESHOLD
-        self.bright_threshold_label, self.bright_threshold_entry = create_param_entry(
-            self.sliders_frame,
-            f"Threshold Amarelo: {self.bright_threshold}", # Label changed for clarity
-            self.bright_threshold_var,
-            self._on_bright_threshold_change
-        )
-
-        # --- NEW: BLUE THRESHOLD ENTRY ---
-        self.blue_threshold_label, self.blue_threshold_entry = create_param_entry(
-            self.sliders_frame,
-            f"Threshold Azul: {self.blue_threshold}",
-            self.blue_threshold_var,
-            self._on_blue_threshold_change
-        )
-
-        # --- NEW: RED THRESHOLD ENTRY ---
-        self.red_threshold_label, self.red_threshold_entry = create_param_entry(
-            self.sliders_frame,
-            f"Threshold Vermelho: {self.red_threshold}",
-            self.red_threshold_var,
-            self._on_red_threshold_change
-        )
-
-        # DARK MORPH KERNEL SIZE
-        self.dark_kernel_label, self.dark_kernel_entry = create_param_entry(
-            self.sliders_frame,
-            f"Kernel Escuro: {self.dark_morph_kernel_size}",
-            self.dark_kernel_var,
-            self._on_dark_kernel_change
-        )
-
-        # DARK MORPH ITERATIONS
-        self.dark_iterations_label, self.dark_iterations_entry = create_param_entry(
-            self.sliders_frame,
-            f"Iterações Escuro: {self.dark_morph_iterations}",
-            self.dark_iterations_var,
-            self._on_dark_iterations_change
-        )
-
-        # BRIGHT MORPH KERNEL SIZE (applied to all color defects)
-        self.bright_kernel_label, self.bright_kernel_entry = create_param_entry(
-            self.sliders_frame,
-            f"Kernel Colorido: {self.bright_morph_kernel_size}", # Label changed for clarity
-            self.bright_kernel_var,
-            self._on_bright_kernel_change
-        )
-
-        # BRIGHT MORPH ITERATIONS (applied to all color defects)
-        self.bright_iterations_label, self.bright_iterations_entry = create_param_entry(
-            self.sliders_frame,
-            f"Iterações Colorido: {self.bright_morph_iterations}", # Label changed for clarity
-            self.bright_iterations_var,
-            self._on_bright_iterations_change
-        )
-
-        # Dark Gradient Threshold Entry
-        self.dark_gradient_threshold_label, self.dark_gradient_threshold_entry = create_param_entry(
-            self.sliders_frame,
-            f"Gradiente Escuro: {self.dark_gradient_threshold}",
-            self.dark_gradient_threshold_var,
-            self._on_dark_gradient_threshold_change
-        )
 
         # MIN DEFECT AREA
         self.min_defect_area_label, self.min_defect_area_entry = create_param_entry(
@@ -260,20 +190,19 @@ class InspectionWindow(ctk.CTkToplevel):
         self.toggle_contours.pack(pady=10)
 
         # DefeitosInfo
-        # The total_defects_var is also initialized in __init__
-        frame_td = ctk.CTkFrame(self.sliders_frame, fg_color="transparent")  # Use transparent frame
-        frame_td.pack(fill="x", pady=25)  # Pack this horizontal pair frame vertically
-        self.total_defects_count_label = ctk.CTkLabel(frame_td, text="Total de defeitos")
-        self.total_defects_count_label.pack(side="left", padx=(0, 10))
-        self.total_defects_entry = ctk.CTkEntry(frame_td, textvariable=self.total_defects_var,
-                                                state="readonly", width=50, text_color="red")
-        self.total_defects_entry.pack(side="right")
 
         self.label_info = ctk.CTkLabel(self.sliders_frame,
                                        text="Total de defeitos\n(verificados)",
                                        justify="left",
                                        width=100)
-        self.label_info.pack(side="left", padx=(0, 10))
+        self.label_info.pack(side="left", padx=(0, 40), pady=(40,40))
+
+        # Tuner Window
+        self.button_tuner_window = ctk.CTkButton(
+            self.left_panel, text="Tuner Window",
+            command=self.open_tuner_window
+        )
+        self.button_tuner_window.pack(pady=5)
 
         # Área da imagem à direita
         self.frame_img = ctk.CTkFrame(self, width=s[0] + 4, height=s[1] + 4, fg_color="gray80")
@@ -311,6 +240,73 @@ class InspectionWindow(ctk.CTkToplevel):
         # Janela fixa
         self.geometry(f"{s[0] + 200}x{s[1] + 40}")
         self.resizable(False, False)
+
+        if self.user_type == "User":
+            self.dark_threshold_entry.configure(state="disabled", fg_color="gray70")
+            self.bright_threshold_entry.configure(state="disabled", fg_color="gray70")
+            self.blue_threshold_entry.configure(state="disabled", fg_color="gray70")
+            self.red_threshold_entry.configure(state="disabled", fg_color="gray70")
+            self.dark_kernel_entry.configure(state="disabled", fg_color="gray70")
+            self.dark_iterations_entry.configure(state="disabled", fg_color="gray70")
+            self.bright_kernel_entry.configure(state="disabled", fg_color="gray70")
+            self.bright_iterations_entry.configure(state="disabled", fg_color="gray70")
+            self.dark_gradient_threshold_entry.configure(state="disabled", fg_color="gray70")
+            self.min_defect_area_entry.configure(state="disabled", fg_color="gray70")
+
+    def open_tuner_window(self):
+        self.withdraw()  # Esconde a janela de inspeção
+
+        self.tuner_window = DefectTunerWindow(
+            master=self,
+            tpl_img=self.template_masked,
+            aligned_img=self.current_masked,
+            mask=self.mask_full,
+            reopen_callback=self._on_tuner_close  # <- isto é essencial!
+        )
+
+    def _on_tuner_close(self):
+        self.deiconify()  # Reabre a janela de inspeção
+        self.state("zoomed")
+        self._recalculate_defects()
+        self._update_defect_image()
+
+    def _atualizar_preview(self):
+        s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
+
+        # Atualiza máscaras com base em imagem atual e parâmetros
+        self.defect_mask, self.defect_contours, \
+            self.darker_mask_filtered, self.yellow_mask, \
+            self.blue_mask, self.red_mask = detect_defects(
+            self.template_masked,
+            self.current_masked,
+            self.mask_full,
+            self.dark_threshold,
+            self.bright_threshold,
+            self.dark_morph_kernel_size,
+            self.dark_morph_iterations,
+            self.bright_morph_kernel_size,
+            self.bright_morph_iterations,
+            self.min_defect_area,
+            self.dark_gradient_threshold,
+            self.blue_threshold,
+            self.red_threshold
+        )
+
+        # Atualiza imagens
+        self.tk_aligned = _prepare_image_grayscale(self.current_masked, s)
+        self.tk_defect = _prepare_image_grayscale(
+            cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full),
+            s,
+            draw_contours=self.defect_contours if self.show_contours_var.get() else None
+        )
+
+        # Aplica imagem base no label
+        if self.toggle.get():
+            self.lbl_img.configure(image=self.tk_template)
+            self.lbl_img.image = self.tk_template
+        else:
+            self.lbl_img.configure(image=self.tk_aligned)
+            self.lbl_img.image = self.tk_aligned
 
     def _toggle_defect_contours(self):
         self.show_defect_contours = self.show_contours_var.get()
@@ -392,7 +388,7 @@ class InspectionWindow(ctk.CTkToplevel):
                     break
 
         if latas_com_defeito:
-            texto = "⚠️ Latas com defeitos: " + ", ".join(str(n) for n in sorted(latas_com_defeito))
+            texto = f"⚠️ Latas com defeitos: {self.total_defects_var.get()}\n\r" + ", ".join(str(n) for n in sorted(latas_com_defeito))
         else:
             texto = "✅ Nenhum defeito dentro das latas detectado."
 
@@ -625,6 +621,7 @@ class InspectionWindow(ctk.CTkToplevel):
         self.total_defects_var.set(str(len(self.defect_contours)))
         self.lbl_img.configure(image=self.tk_defect)
         self.lbl_img.image = self.tk_defect
+        self._analisar_latas_com_defeito()
 
     def _save_params(self):
         params = {

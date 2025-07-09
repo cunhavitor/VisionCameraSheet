@@ -2,13 +2,15 @@ import customtkinter as ctk
 import json
 import os
 
+from config.utils import center_window
+
 USERS_FILE = "config/users.json"
 
 class LoginWindow(ctk.CTkToplevel):
     def __init__(self, parent, on_login_callback):
         super().__init__(parent)
         self.title("Login")
-        self.geometry("400x350")
+        center_window(self, 400, 350) #self.geometry("400x350")
         self.resizable(False, False)
 
         self.on_login_callback = on_login_callback

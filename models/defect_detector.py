@@ -110,18 +110,18 @@ def detect_defects(tpl, aligned, mask,
     brighter_clean = cv2.morphologyEx(brighter_mask, cv2.MORPH_OPEN, k_bright, iterations=bright_morph_iterations)
     brighter_clean = cv2.morphologyEx(brighter_clean, cv2.MORPH_CLOSE, k_bright, iterations=bright_morph_iterations)
 
-    # Process blue defects mask # <--- NEW
+    # Process blue defects mask
     blue_clean = cv2.morphologyEx(blue_mask, cv2.MORPH_OPEN, k_bright, iterations=bright_morph_iterations)
     blue_clean = cv2.morphologyEx(blue_clean, cv2.MORPH_CLOSE, k_bright, iterations=bright_morph_iterations)
 
-    # Process red defects mask # <--- NEW
+    # Process red defects mask
     red_clean = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, k_bright, iterations=bright_morph_iterations)
     red_clean = cv2.morphologyEx(red_clean, cv2.MORPH_CLOSE, k_bright, iterations=bright_morph_iterations)
 
     # Combine ALL cleaned masks
     combined_cleaned_temp = cv2.bitwise_or(darker_clean, brighter_clean)
-    combined_cleaned_temp = cv2.bitwise_or(combined_cleaned_temp, blue_clean) # <--- NEW
-    combined_cleaned = cv2.bitwise_or(combined_cleaned_temp, red_clean)       # <--- NEW
+    combined_cleaned_temp = cv2.bitwise_or(combined_cleaned_temp, blue_clean)
+    combined_cleaned = cv2.bitwise_or(combined_cleaned_temp, red_clean)
 
 
     # Apply the overall inspection mask (ROI)

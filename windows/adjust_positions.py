@@ -8,6 +8,9 @@ from customtkinter import CTkLabel, CTkButton
 from config.config import TEMPLATE_IMAGE_PATH
 import tkinter as tk  # import necessário
 
+from config.utils import center_window
+
+
 class InstanciaPoligono:
     def __init__(self, center, scale=1.0, numero_lata=None):
         self.center = center
@@ -18,7 +21,7 @@ class AdjustPositionsWindow(ctk.CTkToplevel):
     def __init__(self, master=None):
         super().__init__(master)
         self.title("Ajustar Máscara")
-
+        center_window(self, 800, 600)
         self.definir_area_ativa = False
         self.ovals = []
         self.selected_oval = None
@@ -233,8 +236,8 @@ class AdjustPositionsWindow(ctk.CTkToplevel):
             cx, cy = instancia.center
             s = instancia.scale
             pontos_absolutos = [(int(cx + x * s), int(cy + y * s)) for x, y in self.forma_base]
-            draw.polygon(pontos_absolutos, outline="red", fill=None, width=8)
-            draw.ellipse([(cx - 15, cy - 15), (cx + 15, cy + 15)], fill="red")
+            draw.polygon(pontos_absolutos, outline="lightgreen", fill=None, width=12)
+            draw.ellipse([(cx - 30, cy - 30), (cx + 30, cy + 30)], fill="red")
             draw.text((cx, cy-100), str(instancia.numero_lata), fill="black", anchor="mm", font_size=120)
 
         self.scaled_image = img_copy.resize((self.scaled_img_width, self.scaled_img_height), Image.Resampling.NEAREST)
