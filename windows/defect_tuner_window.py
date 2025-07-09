@@ -1,23 +1,28 @@
 import customtkinter as ctk
-from PIL import Image, ImageTk
 import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+from PIL import Image
+from customtkinter import CTkImage
 
+from config.config import INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT
 from config.utils import center_window
 from models.defect_detector import detect_defects
-import numpy as np
-import matplotlib.pyplot as plt
 from widgets.param_entry_simple_numeric import create_param_entry
 
 
 class DefectTunerWindow(ctk.CTkToplevel):
-    def __init__(self, master, tpl_img, aligned_img, mask,reopen_callback=None):
+    def __init__(self, master, tpl_img, aligned_img, mask, reopen_callback=None):
         super().__init__(master)
+        self.silent_mode = True
+
+        s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
 
         self.reopen_callback = reopen_callback
         self.protocol("WM_DELETE_WINDOW", self._on_close)
-
+        self.state("zoomed")
         self.title("Ajuste de Parâmetros de Defeitos")
-        center_window(self, 1000, 800)
+        center_window(self, 1050, 800)
 
         self.tpl = tpl_img
         self.aligned = aligned_img
@@ -50,19 +55,36 @@ class DefectTunerWindow(ctk.CTkToplevel):
         self.view_mode = ctk.StringVar(value="Final")
         self.display_mode = ctk.StringVar(value="Colorida")
 
-        self.control_frame = ctk.CTkFrame(self, width=400)
+        self.control_frame = ctk.CTkFrame(self, width=500)
         self.control_frame.pack(side="left", fill="y", padx=10, pady=10)
+        self.control_frame.propagate(False)
+
+        self.container_sliders = ctk.CTkFrame(self.control_frame, fg_color="transparent")
+        self.container_sliders.pack(padx=30, pady=10, fill="x")
 
         self._create_sliders()
-        self.defect_count_label = ctk.CTkLabel(self.control_frame, text="")
-        self.defect_count_label.pack(pady=10)
 
-        self.image_label = ctk.CTkLabel(self, text="")
-        self.image_label.pack(side="right", padx=10, pady=10)
+        self.right_frame = ctk.CTkFrame(self)
+        self.right_frame.pack(side="top", anchor="nw", padx=10, pady=10)
+
+        self.image_frame = ctk.CTkFrame(
+            self.right_frame,
+            fg_color="gray80",
+        )
+        self.image_frame.pack(padx=10, pady=10)
+
+        self.image_label = ctk.CTkLabel(self.image_frame, text="")
+        self.image_label.pack(padx=4, pady=4)
+
+        self.buttons_frame = ctk.CTkFrame(self.right_frame, fg_color="gray", )
+        self.buttons_frame.pack(fill="x", padx=10, pady=40, )
 
         self._restore_saved_params()
         self._create_buttons()
         self._update_preview()
+
+        self.silent_mode = False  # <- ativa a execução normal
+        self._update_preview()  # primeira atualização após carregar tudo
 
     def _on_close(self):
         print("🔁 Tuner fechado, a reabrir inspection...")
@@ -72,113 +94,159 @@ class DefectTunerWindow(ctk.CTkToplevel):
 
     def _create_sliders(self):
         self.dark_threshold_entry = create_param_entry(
-            self.control_frame, "Threshold Escuro", self.dark_threshold_var,
+            self.container_sliders, "Threshold Escuro", self.dark_threshold_var,
             command=self._on_dark_threshold_change,
             step=1, min_value=0, max_value=255)
 
         self.bright_threshold_entry = create_param_entry(
-            self.control_frame, "Threshold Amarelo", self.bright_threshold_var,
+            self.container_sliders, "Threshold Amarelo", self.bright_threshold_var,
             command=self._on_bright_threshold_change,
             step=1, min_value=0, max_value=255)
 
         self.blue_threshold_entry = create_param_entry(
-            self.control_frame, "Threshold Azul", self.blue_threshold_var,
+            self.container_sliders, "Threshold Azul", self.blue_threshold_var,
             command=self._on_blue_threshold_change,
             step=1, min_value=0, max_value=255)
 
         self.red_threshold_entry = create_param_entry(
-            self.control_frame, "Threshold Vermelho", self.red_threshold_var,
+            self.container_sliders, "Threshold Vermelho", self.red_threshold_var,
             command=self._on_red_threshold_change,
             step=1, min_value=0, max_value=255)
 
         self.dark_kernel_entry = create_param_entry(
-            self.control_frame, "Kernel Escuro", self.dark_kernel_var,
+            self.container_sliders, "Kernel Escuro", self.dark_kernel_var,
             command=self._on_dark_kernel_change,
             step=2, min_value=1, max_value=15)  # kernel ímpar, passo 2 para facilitar
 
         self.dark_iterations_entry = create_param_entry(
-            self.control_frame, "Iterações Escuro", self.dark_iterations_var,
+            self.container_sliders, "Iterações Escuro", self.dark_iterations_var,
             command=self._on_dark_iterations_change,
             step=1, min_value=1, max_value=10)
 
         self.bright_kernel_entry = create_param_entry(
-            self.control_frame, "Kernel Colorido", self.bright_kernel_var,
+            self.container_sliders, "Kernel Colorido", self.bright_kernel_var,
             command=self._on_bright_kernel_change,
             step=2, min_value=1, max_value=15)
 
         self.bright_iterations_entry = create_param_entry(
-            self.control_frame, "Iterações Colorido", self.bright_iterations_var,
+            self.container_sliders, "Iterações Colorido", self.bright_iterations_var,
             command=self._on_bright_iterations_change,
             step=1, min_value=1, max_value=10)
 
         self.dark_gradient_threshold_entry = create_param_entry(
-            self.control_frame, "Gradiente Escuro", self.dark_gradient_threshold_var,
+            self.container_sliders, "Gradiente Escuro", self.dark_gradient_threshold_var,
             command=self._on_dark_gradient_threshold_change,
             step=1, min_value=0, max_value=255)
 
         self.min_defect_area_entry = create_param_entry(
-            self.control_frame, "Tamanho mín. defeito", self.min_defect_area_var,
+            self.container_sliders, "Tamanho mín. defeito", self.min_defect_area_var,
             command=self._on_min_defect_area_change,
             step=1, min_value=1, max_value=1000)
 
     def _add_slider(self, label, var, min_val, max_val):
-        ctk.CTkLabel(self.control_frame, text=label).pack(pady=(10, 0))
-        slider = ctk.CTkSlider(self.control_frame, from_=min_val, to=max_val,
+        ctk.CTkLabel(self.container_sliders, text=label).pack(pady=(10, 0), padx=30)
+        slider = ctk.CTkSlider(self.container_sliders, from_=min_val, to=max_val,
                                variable=var, command=lambda _: self._update_preview())
-        slider.pack(fill="x", padx=10)
+        slider.pack(padx=30)
 
     def _create_buttons(self):
-        ctk.CTkButton(self.control_frame, text="Atualizar Detecção",
-                      command=self._update_preview).pack(pady=20)
-        ctk.CTkLabel(self.control_frame, text="Tipo de Visualização:").pack(pady=(20, 0))
+
+        container1 = ctk.CTkFrame(self.control_frame, fg_color="gray")
+        container1.pack(fill="x", padx=30, pady=(30, 10), )
+
+        self.defect_count_label = ctk.CTkLabel(container1, text="", font=("Arial", 16))
+        self.defect_count_label.pack(pady=(10, 10), padx=(10, 10), side="left")
+        ctk.CTkButton(container1, text="Atualizar Detecção",
+                      command=self._update_preview).pack(pady=(10, 10), padx=(10, 10), side="right")
+
+        container2 = ctk.CTkFrame(self.control_frame, fg_color="gray")
+        container2.pack(fill="x", padx=30, pady=10, )
+        ctk.CTkLabel(container2, text="Tipo de Visualização:", font=("Arial", 16)).pack(pady=(10, 10), padx=(10, 10),
+                                                                                        side="left")
         ctk.CTkOptionMenu(
-            self.control_frame,
+            container2,
             variable=self.view_mode,
             values=["Final", "Escuro", "Amarelo", "Azul", "Vermelho", "Todos (colorido)"],
             command=lambda _: self._update_preview()
-        ).pack()
-        ctk.CTkLabel(self.control_frame, text="Modo de Fundo:").pack(pady=(20, 0))
+        ).pack(pady=(10, 10), padx=(10, 10), side="right")
+
+        container3 = ctk.CTkFrame(self.control_frame, fg_color="gray")
+        container3.pack(fill="x", padx=30, pady=10, )
+
+        ctk.CTkLabel(container3, text="Modo de Fundo:", font=("Arial", 16)).pack(pady=(10, 10), padx=(10, 10),
+                                                                                 side="left")
         ctk.CTkOptionMenu(
-            self.control_frame,
+            container3,
             variable=self.display_mode,
             values=["Colorida", "PB"],
             command=lambda _: self._update_preview()
-        ).pack()
+        ).pack(pady=(10, 10), padx=(10, 10), side="right")
+
+        container4 = ctk.CTkFrame(self.control_frame, fg_color="gray")
+        container4.pack(fill="x", padx=30, pady=30, )
+
         self.btn_export = ctk.CTkButton(
-            self.control_frame, text="Exportar Imagem",
+            container4, text="Exportar Imagem",
             command=self._export_annotated_image
         )
-        self.btn_export.pack(pady=5)
+        self.btn_export.pack(side="left", padx=10, pady=10)
 
         self.btn_save_params = ctk.CTkButton(
-            self.control_frame, text="Guardar Parâmetros",
+            container4, text="Guardar Parâmetros",
             command=self._save_current_params
         )
-        self.btn_save_params.pack(pady=5)
+        self.btn_save_params.pack(side="left", padx=10, pady=10)
 
         self.btn_plot = ctk.CTkButton(
-            self.control_frame, text="Gráfico Áreas",
+            container4, text="Gráfico Áreas",
             command=self._plot_defect_areas
         )
-        self.btn_plot.pack(pady=5)
+        self.btn_plot.pack(side="left", padx=10, pady=10)
 
     def _plot_defect_areas(self):
         def get_avg_area(mask):
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            areas = [cv2.contourArea(c) for c in contours if cv2.contourArea(c) >= int(self.min_defect_area_var.get())]
-            return np.mean(areas) if areas else 0
+            min_area = int(self.min_defect_area_var.get())
+            valid_areas = [cv2.contourArea(c) for c in contours if cv2.contourArea(c) >= min_area]
+            return np.mean(valid_areas) if valid_areas else 0, len(valid_areas)
 
-        areas = {
-            "Escuro": get_avg_area(self.last_masks["dark"]),
-            "Amarelo": get_avg_area(self.last_masks["bright"]),
-            "Azul": get_avg_area(self.last_masks["blue"]),
-            "Vermelho": get_avg_area(self.last_masks["red"]),
-        }
+        # Dicionários para armazenar áreas e quantidades
+        areas = {}
+        counts = {}
 
-        plt.bar(areas.keys(), areas.values(), color=["blue", "yellow", "cyan", "red"])
-        plt.title("Área média dos defeitos por tipo")
-        plt.ylabel("Área (pixels)")
-        plt.grid(True)
+        # Processar cada tipo de defeito
+        for label, mask in self.last_masks.items():
+            mean_area, count = get_avg_area(mask)
+            label_name = label.capitalize()
+            areas[label_name] = mean_area
+            counts[label_name] = count
+
+        # Ordenar por área média (opcional, pode remover se quiser ordem fixa)
+        sorted_items = sorted(areas.items(), key=lambda x: x[1], reverse=True)
+        labels, values = zip(*sorted_items)
+        count_values = [counts[label] for label in labels]
+
+        # Cores fixas
+        cor_map = {"Escuro": "blue", "Amarelo": "yellow", "Azul": "cyan", "Vermelho": "red"}
+        cores = [cor_map.get(label, "gray") for label in labels]
+
+        # Criar gráfico
+        plt.figure(figsize=(8, 5))
+        bars = plt.bar(labels, values, color=cores)
+
+        # Adicionar texto sobre as barras (média e contagem)
+        for i, (v, c) in enumerate(zip(values, count_values)):
+            plt.text(i, v + 1, f"{v:.1f}\n({c}x)", ha="center", va="bottom", fontsize=10)
+
+        # Linha de área mínima
+        min_area = int(self.min_defect_area_var.get())
+        plt.axhline(y=min_area, color="gray", linestyle="--", label=f"Área mín. ({min_area})")
+
+        plt.title(f"Áreas Médias dos Defeitos por Tipo (min_area = {min_area})")
+        plt.ylabel("Área Média (pixels)")
+        plt.grid(axis="y")
+        plt.legend()
+        plt.tight_layout()
         plt.show()
 
     def _export_annotated_image(self):
@@ -323,10 +391,11 @@ class DefectTunerWindow(ctk.CTkToplevel):
         # Mostrar imagem
         preview_rgb = cv2.cvtColor(preview, cv2.COLOR_BGR2RGB)
         pil_img = Image.fromarray(preview_rgb)
-        pil_img = pil_img.resize((900, 700))
-        img_tk = ImageTk.PhotoImage(pil_img)
-        self.image_label.configure(image=img_tk)
-        self.image_label.image = img_tk
+        pil_img = pil_img.resize((INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT))
+
+        ctk_img = CTkImage(light_image=pil_img, size=(INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT))
+        self.image_label.configure(image=ctk_img)
+        self.image_label.image = ctk_img  # <- mantém a referência correta
 
         self.last_masks = {
             "dark": darker_mask,

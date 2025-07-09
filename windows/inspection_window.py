@@ -85,6 +85,8 @@ class InspectionWindow(ctk.CTkToplevel):
         self.param_path = "config/inspection_params.json"
         params = load_params(self.param_path)
 
+
+
         self.dark_threshold = int(params.get("dark_threshold", 30))
         self.bright_threshold = int(params.get("bright_threshold", 30))
         self.dark_morph_kernel_size = int(params.get("dark_morph_kernel_size", 3))
@@ -111,6 +113,7 @@ class InspectionWindow(ctk.CTkToplevel):
         self.blue_threshold_var = ctk.StringVar(value=str(self.blue_threshold))
         self.red_threshold_var = ctk.StringVar(value=str(self.red_threshold))
 
+        self.show_defect_contours = self.show_contours_var.get()
 
         # 1) Load images and mask
         self.template_full = cv2.imread(template_path)
@@ -146,8 +149,6 @@ class InspectionWindow(ctk.CTkToplevel):
 
         # 5) Setup UI
         self._setup_ui()
-
-
 
     # --- _setup_ui method (remains mostly as you had it, no changes needed inside it anymore) ---
     def _setup_ui(self):
@@ -219,11 +220,11 @@ class InspectionWindow(ctk.CTkToplevel):
         self.right_panel.pack(side="right", fill="y", expand=True, padx=10, pady=10, )
 
         # Criar o CTkTextbox antes de o configurar
-        self.area_info_textbox = ctk.CTkTextbox(self.right_panel, height=200, width=200)
+        self.area_info_textbox = ctk.CTkTextbox(self.right_panel, height=200, width=250)
         self.area_info_textbox.pack(pady=10)
 
         # Criar tooltip para mostrar diferença no mouse
-        self.tooltip_img = ctk.CTkLabel(self.right_panel, text="", width= 100, height=100)
+        self.tooltip_img = ctk.CTkLabel(self.right_panel, text="", width= 150, height=150)
         self.tooltip_img.pack(pady=10)
 
         # Preparação das imagens
@@ -479,10 +480,10 @@ class InspectionWindow(ctk.CTkToplevel):
 
 
         # Prepara imagem em zoom
-        zoom_img = cv2.resize(region_cur, (80, 80), interpolation=cv2.INTER_NEAREST)
+        zoom_img = cv2.resize(region_cur, (150, 150), interpolation=cv2.INTER_NEAREST)
         zoom_img_rgb = cv2.cvtColor(zoom_img, cv2.COLOR_GRAY2RGB)
         pil_img = Image.fromarray(zoom_img_rgb)
-        self.zoom_imgtk = CTkImage(light_image=pil_img, size=(80, 80))
+        self.zoom_imgtk = CTkImage(light_image=pil_img, size=(150, 150))
 
         self.tooltip_img.configure(image=self.zoom_imgtk)
         self.tooltip_img.image = self.zoom_imgtk
