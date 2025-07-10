@@ -1,9 +1,15 @@
+import csv
+import json
+import os
+from datetime import datetime
+
 import customtkinter as ctk
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 from customtkinter import CTkImage
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from config.config import INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT
 from config.utils import center_window
@@ -12,11 +18,13 @@ from widgets.param_entry_simple_numeric import create_param_entry
 
 
 class DefectTunerWindow(ctk.CTkToplevel):
-    def __init__(self, master, tpl_img, aligned_img, mask, reopen_callback=None):
+    def __init__(self, master, tpl_img, aligned_img, mask, reopen_callback=None,user_type="User", user_name=""):
         super().__init__(master)
         self.silent_mode = True
 
         s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
+        self.user_type=user_type
+        self.user_name=user_name
 
         self.reopen_callback = reopen_callback
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -76,8 +84,13 @@ class DefectTunerWindow(ctk.CTkToplevel):
         self.image_label = ctk.CTkLabel(self.image_frame, text="")
         self.image_label.pack(padx=4, pady=4)
 
-        self.buttons_frame = ctk.CTkFrame(self.right_frame, fg_color="gray", )
-        self.buttons_frame.pack(fill="x", padx=10, pady=40, )
+        self.graph_frame = ctk.CTkFrame(self.image_frame)
+        self.graph_frame.pack()
+        self.graph_frame.pack_forget()  # Oculta inicialmente
+
+        self.fig, self.ax = plt.subplots(figsize=(12, 9))
+        self.canvas_plot = FigureCanvasTkAgg(self.fig, master=self.graph_frame)
+        self.canvas_plot.get_tk_widget().pack()
 
         self._restore_saved_params()
         self._create_buttons()
@@ -182,6 +195,19 @@ class DefectTunerWindow(ctk.CTkToplevel):
             command=lambda _: self._update_preview()
         ).pack(pady=(10, 10), padx=(10, 10), side="right")
 
+        container_view_selector = ctk.CTkFrame(self.control_frame, fg_color="gray")
+        container_view_selector.pack(fill="x", padx=30, pady=10)
+        ctk.CTkLabel(container_view_selector, text="Modo de Visualização:", font=("Arial", 16)).pack(pady=10, padx=10, side="left")
+
+        self.view_selector = ctk.StringVar(value="Imagem")
+        ctk.CTkOptionMenu(
+            container_view_selector,
+            variable=self.view_selector,
+            values=["Imagem", "Gráfico"],
+            command=lambda _: self._update_preview()
+        ).pack(pady=10, padx=10, side="right")
+
+
         container4 = ctk.CTkFrame(self.control_frame, fg_color="gray")
         container4.pack(fill="x", padx=30, pady=30, )
 
@@ -203,49 +229,155 @@ class DefectTunerWindow(ctk.CTkToplevel):
         )
         self.btn_plot.pack(side="left", padx=10, pady=10)
 
+    def load_polygons_from_file(self, path="data/mask/instancias_poligonos.txt"):
+        """
+        Lê os polígonos salvos no ficheiro e retorna um dicionário:
+        {
+            lata_id: {'center': (x, y), 'radius': r},
+            ...
+        }
+        """
+        polygons = {}
+        with open(path, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                parts = line.strip().split(':')
+                index = int(parts[0])
+                values = parts[1].split(',')
+                x, y, scale, lata_id = map(float, values)
+                polygons[int(lata_id)] = {
+                    'center': (int(x), int(y)),
+                    'radius': int(scale * 25)  # escala para um raio estimado
+                }
+        return polygons
+
+    def is_contour_inside_polygon(self, contour, polygon):
+
+        """
+        Verifica se o centroide do contorno está dentro do círculo estimado do polígono
+        """
+        M = cv2.moments(contour)
+        if M['m00'] == 0:
+            return False
+        cx = int(M['m10'] / M['m00'])
+        cy = int(M['m01'] / M['m00'])
+        center = polygon['center']
+        radius = polygon['radius']
+
+        distance = np.sqrt((cx - center[0]) ** 2 + (cy - center[1]) ** 2)
+        return distance <= radius
+
+    def calcular_area_por_lata(self, mask, polygons, min_area=10):
+        """
+        Para uma determinada máscara binária e os polígonos das latas,
+        calcula a área total de defeitos dentro de cada polígono.
+        Retorna: dicionário {lata_id: soma_areas}
+        """
+        areas_por_lata = {lata_id: 0 for lata_id in range(1, 49)}
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area < min_area:
+                continue
+
+            for lata_id, poly in polygons.items():
+                if self.is_contour_inside_polygon(cnt, poly):
+                    areas_por_lata[lata_id] += area
+                    break
+
+        return areas_por_lata
+
+    def _show_graph_view(self):
+        # Exemplo de áreas por lata
+        latas = list(range(1, 49))  # 1 a 48
+        areas = np.random.randint(0, 180, size=len(latas))  # simulação para testar
+
+        # Obter valor do parâmetro relevante
+        param_value_map = {
+            "Escuro": int(self.dark_threshold_var.get()),
+            "Amarelo": int(self.bright_threshold_var.get()),
+            "Azul": int(self.blue_threshold_var.get()),
+            "Vermelho": int(self.red_threshold_var.get()),
+        }
+        selected_mode = self.view_mode.get()
+        param_value = param_value_map.get(selected_mode, None)
+
+        # Preparar gráfico
+        self.ax.clear()
+        self.ax.bar(latas, areas, color="gray")
+        if param_value is not None:
+            self.ax.axhline(y=param_value, color='red', linestyle='--', label=f"{selected_mode} = {param_value}")
+
+        self.ax.set_xlim(0, 50)
+        self.ax.set_ylim(0, 200)
+        self.ax.set_xlabel("Número da Lata")
+        self.ax.set_ylabel("Área de Defeito (px²)")
+        self.ax.set_title(f"Áreas por Lata - {selected_mode}")
+        self.ax.grid(True)
+        self.ax.legend()
+        self.canvas_plot.draw()
+
     def _plot_defect_areas(self):
-        def get_avg_area(mask):
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            min_area = int(self.min_defect_area_var.get())
-            valid_areas = [cv2.contourArea(c) for c in contours if cv2.contourArea(c) >= min_area]
-            return np.mean(valid_areas) if valid_areas else 0, len(valid_areas)
+        selected_mode = self.view_mode.get()
+        param_map = {
+            "Azul": ("blue", int(self.blue_threshold_var.get())),
+            "Vermelho": ("red", int(self.red_threshold_var.get())),
+            "Escuro": ("dark", int(self.dark_threshold_var.get())),
+            "Amarelo": ("bright", int(self.bright_threshold_var.get()))
+        }
 
-        # Dicionários para armazenar áreas e quantidades
-        areas = {}
-        counts = {}
+        if selected_mode not in param_map:
+            print("Modo não suportado para gráfico por lata.")
+            return
 
-        # Processar cada tipo de defeito
-        for label, mask in self.last_masks.items():
-            mean_area, count = get_avg_area(mask)
-            label_name = label.capitalize()
-            areas[label_name] = mean_area
-            counts[label_name] = count
+        label_key, param_value = param_map[selected_mode]
 
-        # Ordenar por área média (opcional, pode remover se quiser ordem fixa)
-        sorted_items = sorted(areas.items(), key=lambda x: x[1], reverse=True)
-        labels, values = zip(*sorted_items)
-        count_values = [counts[label] for label in labels]
+        mask = self.last_masks.get(label_key)
+        if mask is None:
+            print(f"Máscara não encontrada para {label_key}")
+            return
 
-        # Cores fixas
-        cor_map = {"Escuro": "blue", "Amarelo": "yellow", "Azul": "cyan", "Vermelho": "red"}
-        cores = [cor_map.get(label, "gray") for label in labels]
+        # Define qual canal usar da imagem alinhada
+        if label_key in ["blue", "red"]:
+            canal_index = {"blue": 0, "red": 2}[label_key]
+            canal_img = self.aligned[:, :, canal_index]
+        elif label_key == "dark":
+            canal_img = cv2.cvtColor(self.aligned, cv2.COLOR_BGR2GRAY)
+        elif label_key == "bright":
+            canal_img = cv2.cvtColor(self.aligned, cv2.COLOR_BGR2LAB)[:, :, 0]  # canal L
+
+        # Carregar polígonos das latas
+        polygonos = self.load_polygons_from_file("data/mask/instancias_poligonos.txt")
+
+        # Calcular máximo por lata
+        max_valores = self.calcular_max_valor_por_lata(
+            canal_img, mask, polygonos, min_area=int(self.min_defect_area_var.get())
+        )
 
         # Criar gráfico
-        plt.figure(figsize=(8, 5))
-        bars = plt.bar(labels, values, color=cores)
+        latas = list(range(1, 49))
+        valores = [max_valores.get(lata, 0) for lata in latas]
 
-        # Adicionar texto sobre as barras (média e contagem)
-        for i, (v, c) in enumerate(zip(values, count_values)):
-            plt.text(i, v + 1, f"{v:.1f}\n({c}x)", ha="center", va="bottom", fontsize=10)
+        fig, ax = plt.subplots(figsize=(12, 5))
+        bars = ax.bar(latas, valores, color='steelblue')
 
-        # Linha de área mínima
-        min_area = int(self.min_defect_area_var.get())
-        plt.axhline(y=min_area, color="gray", linestyle="--", label=f"Área mín. ({min_area})")
+        # Linha horizontal indicando o threshold atual
+        ax.axhline(y=param_value, color='red', linestyle='--', label=f"Threshold = {param_value}")
 
-        plt.title(f"Áreas Médias dos Defeitos por Tipo (min_area = {min_area})")
-        plt.ylabel("Área Média (pixels)")
-        plt.grid(axis="y")
-        plt.legend()
+        # Opcional: mostra valor em cima da barra
+        for i, bar in enumerate(bars):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 3,
+                    f"{int(bar.get_height())}", ha='center', va='bottom', fontsize=8)
+
+        ax.set_xlim(0, 50)
+        ax.set_ylim(0, 260)
+        ax.set_xlabel("Número da Lata")
+        ax.set_ylabel("Valor máx. do parâmetro")
+        ax.set_title(f"Valor Máximo de '{selected_mode}' por Lata")
+        ax.grid(True)
+        ax.legend()
         plt.tight_layout()
         plt.show()
 
@@ -254,6 +386,34 @@ class DefectTunerWindow(ctk.CTkToplevel):
         path = f"export/defect_preview_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         cv2.imwrite(path, self.last_preview)
         print(f"Imagem exportada para {path}")
+
+    def calcular_max_valor_por_lata(self, image_channel, mask, polygons, min_area=10):
+        """
+        Para cada contorno válido dentro de uma lata, retorna o maior valor do canal (ex: azul)
+        dentro do contorno, agrupado por lata_id.
+        """
+        max_valores = {lata_id: 0 for lata_id in range(1, 49)}
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area < min_area:
+                continue
+
+            mask_contorno = np.zeros_like(mask)
+            cv2.drawContours(mask_contorno, [cnt], -1, 255, -1)  # máscara do contorno
+
+            # Aplica a máscara ao canal de imagem
+            valores = cv2.bitwise_and(image_channel, image_channel, mask=mask_contorno)
+
+            max_valor_contorno = np.max(valores)
+
+            for lata_id, poly in polygons.items():
+                if self.is_contour_inside_polygon(cnt, poly):
+                    max_valores[lata_id] = max(max_valores[lata_id], max_valor_contorno)
+                    break
+
+        return max_valores
 
     def _update_preview(self):
         # Para pegar valores atuais, converte os StringVars para int
@@ -394,8 +554,16 @@ class DefectTunerWindow(ctk.CTkToplevel):
         pil_img = pil_img.resize((INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT))
 
         ctk_img = CTkImage(light_image=pil_img, size=(INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT))
-        self.image_label.configure(image=ctk_img)
-        self.image_label.image = ctk_img  # <- mantém a referência correta
+
+        if self.view_selector.get() == "Imagem":
+            self.image_label.pack(padx=4, pady=4)
+            self.graph_frame.pack_forget()
+            self.image_label.configure(image=ctk_img)
+            self.image_label.image = ctk_img
+        else:
+            self.image_label.pack_forget()
+            self.graph_frame.pack(padx=4, pady=4)
+            self._show_graph_view()
 
         self.last_masks = {
             "dark": darker_mask,
@@ -428,9 +596,9 @@ class DefectTunerWindow(ctk.CTkToplevel):
             print("Ficheiro de parâmetros não encontrado.")
 
     def _save_current_params(self):
-        import json, os
-
         os.makedirs("config", exist_ok=True)
+        os.makedirs("logs", exist_ok=True)
+
         params = {
             "dark_threshold": self.dark_threshold_var.get(),
             "bright_threshold": self.bright_threshold_var.get(),
@@ -444,27 +612,49 @@ class DefectTunerWindow(ctk.CTkToplevel):
             "detect_area": self.min_defect_area_var.get()
         }
 
+        # 1. Guardar JSON principal
         with open("config/inspection_params.json", "w") as f:
             json.dump(params, f, indent=4)
 
+        # 2. Adicionar entrada ao log CSV
+        user = self.user_name
+        user_type = self.user_type
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_path = "logs/param_history.csv"
+        file_exists = os.path.isfile(log_path)
+
+        with open(log_path, mode="a", newline="", encoding="utf-8") as csvfile:
+            writer = csv.writer(csvfile, delimiter=';')
+            if not file_exists:
+                writer.writerow(["timestamp", "user", "user_type"] + list(params.keys()))
+            writer.writerow([timestamp, user, user_type] + list(params.values()))
+
         print("Parâmetros guardados com sucesso.")
 
+        # Os callbacks para sliders que só atualizam a preview
+
     def _on_dark_threshold_change(self, new_value=None):
+        self.last_changed_param = "dark_threshold"
         self._update_preview()
 
     def _on_bright_threshold_change(self, new_value=None):
+        self.last_changed_param = "bright_threshold"
         self._update_preview()
 
     def _on_blue_threshold_change(self, new_value=None):
+        self.last_changed_param = "blue_threshold"
         self._update_preview()
 
     def _on_red_threshold_change(self, new_value=None):
+        self.last_changed_param = "red_threshold"
         self._update_preview()
 
     def _on_dark_kernel_change(self, new_value=None):
+
         self._update_preview()
 
     def _on_dark_iterations_change(self, new_value=None):
+
         self._update_preview()
 
     def _on_bright_kernel_change(self, new_value=None):
@@ -474,6 +664,7 @@ class DefectTunerWindow(ctk.CTkToplevel):
         self._update_preview()
 
     def _on_dark_gradient_threshold_change(self, new_value=None):
+        self.last_changed_param = "dark_gradient_threshold"
         self._update_preview()
 
     def _on_min_defect_area_change(self, new_value=None):

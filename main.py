@@ -27,6 +27,7 @@ class App(ctk.CTk):
         center_window(self, 800, 600)
         ctk.set_appearance_mode("dark")
         self.user_type=""
+        self.user=""
         # Layout principal
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
@@ -130,6 +131,7 @@ class App(ctk.CTk):
 
     def on_login_sucesso(self, username, user_type):
         self.user_type = user_type
+        self.user=username
         self.login_window.destroy()
         self.deiconify()
         self._atualizar_acessos()
@@ -182,7 +184,7 @@ class App(ctk.CTk):
         mask_path = "data/mask/leaf_mask.png"
         template_path = "data/raw/fba_template.jpg"
         current_path = "data/raw/fba_actual.jpg"
-        self.inspection_window = InspectionWindow(self, template_path, current_path, mask_path, self.user_type)
+        self.inspection_window = InspectionWindow(self, template_path, current_path, mask_path, self.user_type, self.user)
         self.inspection_window.protocol("WM_DELETE_WINDOW", self.on_inspection_close)
 
     def on_check_camera_position_window_close(self):

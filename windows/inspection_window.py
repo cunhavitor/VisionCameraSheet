@@ -15,6 +15,7 @@ from models.align_image import align_with_template
 from models.defect_detector import detect_defects
 from widgets.param_entry_hor import create_param_entry
 from windows.defect_tuner_window import DefectTunerWindow
+from windows.sheet_cans_analyse import SheetCansAnalyse
 
 
 def _prepare_image(img_cv, size, draw_contours=None):
@@ -68,7 +69,7 @@ def _validate_numeric(value_if_allowed):
 
 
 class InspectionWindow(ctk.CTkToplevel):
-    def __init__(self, parent, template_path, current_path, mask_path, user_type="User"):
+    def __init__(self, parent, template_path, current_path, mask_path, user_type="User", user=""):
         super().__init__(parent)
 
         self.template_path = template_path
@@ -79,7 +80,9 @@ class InspectionWindow(ctk.CTkToplevel):
         self.area_info_textbox = None
         self.state("zoomed")
         self.title("Janela de Inspeção")
+
         self.user_type=user_type
+        self.user=user
 
         # parameters adjustable (default values)
         self.param_path = "config/inspection_params.json"
@@ -262,7 +265,9 @@ class InspectionWindow(ctk.CTkToplevel):
             tpl_img=self.template_masked,
             aligned_img=self.current_masked,
             mask=self.mask_full,
-            reopen_callback=self._on_tuner_close  # <- isto é essencial!
+            reopen_callback=self._on_tuner_close,
+            user_type=self.user_type,
+            user_name=self.user
         )
 
     def _on_tuner_close(self):
