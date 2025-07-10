@@ -1,12 +1,9 @@
 import json
 import time
-from tkinter import StringVar
-import os
 from shapely.geometry import Polygon, Point
 import customtkinter as ctk
 import cv2
-import numpy as np
-from PIL import Image, ImageDraw, ImageTk
+from PIL import Image, ImageDraw
 from customtkinter import CTkImage
 
 from config.config import INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT
@@ -15,8 +12,6 @@ from models.align_image import align_with_template
 from models.defect_detector import detect_defects
 from widgets.param_entry_hor import create_param_entry
 from windows.defect_tuner_window import DefectTunerWindow
-from windows.sheet_cans_analyse import SheetCansAnalyse
-
 
 def _prepare_image(img_cv, size, draw_contours=None):
     # redimensiona e converte para CTkImage; opcionalmente desenha contornos
@@ -72,6 +67,23 @@ class InspectionWindow(ctk.CTkToplevel):
     def __init__(self, parent, template_path, current_path, mask_path, user_type="User", user=""):
         super().__init__(parent)
 
+        self.bright_threshold_label = None
+        self.dark_threshold_label = None
+        self.bright_iterations_label = None
+        self.bright_kernel_label = None
+        self.dark_iterations_label = None
+        self.red_threshold_label = None
+        self.blue_threshold_label = None
+        self.dark_kernel_label = None
+        self.dark_gradient_threshold_entry = None
+        self.bright_iterations_entry = None
+        self.bright_kernel_entry = None
+        self.dark_iterations_entry = None
+        self.dark_kernel_entry = None
+        self.red_threshold_entry = None
+        self.blue_threshold_entry = None
+        self.bright_threshold_entry = None
+        self.dark_threshold_entry = None
         self.template_path = template_path
         self.current_path = current_path
         self.mask_path = mask_path
