@@ -67,6 +67,7 @@ class InspectionWindow(ctk.CTkToplevel):
     def __init__(self, parent, template_path, current_path, mask_path, user_type="User", user=""):
         super().__init__(parent)
 
+        self.param_path = None
         self.tuner_window = None
         self.bright_threshold_label = None
         self.dark_threshold_label = None
@@ -97,37 +98,9 @@ class InspectionWindow(ctk.CTkToplevel):
         self.user_type=user_type
         self.user=user
 
-        # parameters adjustable (default values)
-        self.param_path = "config/inspection_params.json"
-        params = load_params(self.param_path)
+        # load params
 
-
-
-        self.dark_threshold = int(params.get("dark_threshold", 30))
-        self.bright_threshold = int(params.get("bright_threshold", 30))
-        self.dark_morph_kernel_size = int(params.get("dark_morph_kernel_size", 3))
-        self.dark_morph_iterations = int(params.get("dark_morph_iterations", 1))
-        self.bright_morph_kernel_size = int(params.get("bright_morph_kernel_size", 3))
-        self.bright_morph_iterations = int(params.get("bright_morph_iterations", 1))
-        self.min_defect_area = int(params.get("detect_area", 1))
-        self.dark_gradient_threshold = int(params.get("dark_gradient_threshold", 10))
-        self.blue_threshold = int(params.get("blue_threshold", 25))
-        self.red_threshold = int(params.get("red_threshold", 25))
-
-        # Initialize all StringVar and BooleanVar objects here
-        self.dark_threshold_var = ctk.StringVar(value=str(self.dark_threshold))
-        self.bright_threshold_var = ctk.StringVar(value=str(self.bright_threshold))
-        self.dark_kernel_var = ctk.StringVar(value=str(self.dark_morph_kernel_size))
-        self.dark_iterations_var = ctk.StringVar(value=str(self.dark_morph_iterations))
-        self.bright_kernel_var = ctk.StringVar(value=str(self.bright_morph_kernel_size))
-        self.bright_iterations_var = ctk.StringVar(value=str(self.bright_morph_iterations))
-        self.min_defect_area_var = ctk.StringVar(value=str(self.min_defect_area))
-        self.total_defects_var = ctk.StringVar(value="0")
-        self.show_contours_var = ctk.BooleanVar(value=True)
-        self.dark_gradient_threshold_var = ctk.StringVar(value=str(self.dark_gradient_threshold))
-        # --- NEW VARS FOR COLOR THRESHOLDS ---
-        self.blue_threshold_var = ctk.StringVar(value=str(self.blue_threshold))
-        self.red_threshold_var = ctk.StringVar(value=str(self.red_threshold))
+        self._load_params()
 
         self.show_defect_contours = self.show_contours_var.get()
 
@@ -165,6 +138,37 @@ class InspectionWindow(ctk.CTkToplevel):
 
         # 5) Setup UI
         self._setup_ui()
+
+    def _load_params(self):
+        # parameters adjustable (default values)
+        self.param_path = "config/inspection_params.json"
+        params = load_params(self.param_path)
+
+        self.dark_threshold = int(params.get("dark_threshold", 30))
+        self.bright_threshold = int(params.get("bright_threshold", 30))
+        self.dark_morph_kernel_size = int(params.get("dark_morph_kernel_size", 3))
+        self.dark_morph_iterations = int(params.get("dark_morph_iterations", 1))
+        self.bright_morph_kernel_size = int(params.get("bright_morph_kernel_size", 3))
+        self.bright_morph_iterations = int(params.get("bright_morph_iterations", 1))
+        self.min_defect_area = int(params.get("detect_area", 1))
+        self.dark_gradient_threshold = int(params.get("dark_gradient_threshold", 10))
+        self.blue_threshold = int(params.get("blue_threshold", 25))
+        self.red_threshold = int(params.get("red_threshold", 25))
+
+        # Initialize all StringVar and BooleanVar objects here
+        self.dark_threshold_var = ctk.StringVar(value=str(self.dark_threshold))
+        self.bright_threshold_var = ctk.StringVar(value=str(self.bright_threshold))
+        self.dark_kernel_var = ctk.StringVar(value=str(self.dark_morph_kernel_size))
+        self.dark_iterations_var = ctk.StringVar(value=str(self.dark_morph_iterations))
+        self.bright_kernel_var = ctk.StringVar(value=str(self.bright_morph_kernel_size))
+        self.bright_iterations_var = ctk.StringVar(value=str(self.bright_morph_iterations))
+        self.min_defect_area_var = ctk.StringVar(value=str(self.min_defect_area))
+        self.total_defects_var = ctk.StringVar(value="0")
+        self.show_contours_var = ctk.BooleanVar(value=True)
+        self.dark_gradient_threshold_var = ctk.StringVar(value=str(self.dark_gradient_threshold))
+        # --- NEW VARS FOR COLOR THRESHOLDS ---
+        self.blue_threshold_var = ctk.StringVar(value=str(self.blue_threshold))
+        self.red_threshold_var = ctk.StringVar(value=str(self.red_threshold))
 
     # --- _setup_ui method (remains mostly as you had it, no changes needed inside it anymore) ---
     def _setup_ui(self):
@@ -287,6 +291,7 @@ class InspectionWindow(ctk.CTkToplevel):
         self.deiconify()  # Reabre a janela de inspeção
         self.state("zoomed")
         self._recalculate_defects()
+        self._load_params()
         self._update_defect_image()
 
     def _atualizar_preview(self):
@@ -327,9 +332,17 @@ class InspectionWindow(ctk.CTkToplevel):
             self.lbl_img.configure(image=self.tk_aligned)
             self.lbl_img.image = self.tk_aligned
 
+    def _show_defects(self):
+        self.total_defects_var.set(str(len(self.defect_contours)))
+        self.lbl_img.configure(image=self.tk_defect)
+        self.lbl_img.image = self.tk_defect
+        self._analisar_latas_com_defeito()
+
+
     def _toggle_defect_contours(self):
         self.show_defect_contours = self.show_contours_var.get()
-        self._update_defect_image()
+        self._atualizar_preview()
+        self._show_defects()
 
     def _recalculate_defects(self):
         # --- UPDATED CALL TO DETECT_DEFECTS ---
@@ -430,8 +443,8 @@ class InspectionWindow(ctk.CTkToplevel):
             aligned_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
             self.tk_defect = _prepare_image_grayscale(aligned_masked, s)
 
-        self.lbl_img.configure(image=self.tk_defect)
-        self.lbl_img.image = self.tk_defect
+        self._show_defects()
+        self._upd
 
         end_time = time.time()
 
@@ -636,11 +649,6 @@ class InspectionWindow(ctk.CTkToplevel):
             self.lbl_img.configure(image=self.tk_aligned)
             self.lbl_img.image = self.tk_aligned
 
-    def _show_defects(self):
-        self.total_defects_var.set(str(len(self.defect_contours)))
-        self.lbl_img.configure(image=self.tk_defect)
-        self.lbl_img.image = self.tk_defect
-        self._analisar_latas_com_defeito()
 
     def _save_params(self):
         params = {
