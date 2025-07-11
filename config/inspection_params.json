@@ -1,6 +1,6 @@
 {
-    "dark_threshold": "53",
-    "bright_threshold": "25",
+    "dark_threshold": "55",
+    "bright_threshold": "27",
     "blue_threshold": "25",
     "red_threshold": "25",
     "dark_morph_kernel_size": "3",

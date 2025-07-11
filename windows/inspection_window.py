@@ -67,6 +67,7 @@ class InspectionWindow(ctk.CTkToplevel):
     def __init__(self, parent, template_path, current_path, mask_path, user_type="User", user=""):
         super().__init__(parent)
 
+        self.tuner_window = None
         self.bright_threshold_label = None
         self.dark_threshold_label = None
         self.bright_iterations_label = None
@@ -271,7 +272,6 @@ class InspectionWindow(ctk.CTkToplevel):
 
     def open_tuner_window(self):
         self.withdraw()  # Esconde a janela de inspeção
-
         self.tuner_window = DefectTunerWindow(
             master=self,
             tpl_img=self.template_masked,
@@ -281,6 +281,7 @@ class InspectionWindow(ctk.CTkToplevel):
             user_type=self.user_type,
             user_name=self.user
         )
+        self.tuner_window.protocol("WM_DELETE_WINDOW", self._on_tuner_close)
 
     def _on_tuner_close(self):
         self.deiconify()  # Reabre a janela de inspeção

@@ -15,6 +15,7 @@ from windows.login_window import LoginWindow
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.login_window = None
         self.auto_can_detect_cans_window = None
         self.cap = None
         self.preview_running = None

@@ -1,3 +1,4 @@
 timestamp;user;user_type;dark_threshold;bright_threshold;blue_threshold;red_threshold;dark_morph_kernel_size;dark_morph_iterations;bright_morph_kernel_size;bright_morph_iterations;dark_gradient_threshold;detect_area
 2025-07-10 11:48:16;Vitor;SuperAdmin;53;25;25;25;3;1;3;1;15;6
 2025-07-10 13:35:32;;;53;25;25;25;3;1;3;1;15;6
+2025-07-11 12:22:43;;;55;27;25;25;3;1;3;1;15;6
