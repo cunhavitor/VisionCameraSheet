@@ -444,7 +444,7 @@ class InspectionWindow(ctk.CTkToplevel):
             self.tk_defect = _prepare_image_grayscale(aligned_masked, s)
 
         self._show_defects()
-        self._upd
+        self._update_defect_image()
 
         end_time = time.time()
 

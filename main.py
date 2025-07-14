@@ -185,7 +185,7 @@ class App(ctk.CTk):
         mask_path = "data/mask/leaf_mask.png"
         template_path = "data/raw/fba_template.jpg"
         current_path = "data/raw/fba_actual.jpg"
-        self.inspection_window = InspectionWindow(self, template_path, current_path, mask_path, self.user_type, self.user)
+        self.inspection_window =  InspectionWindow(self, template_path, current_path, mask_path, self.user_type, self.user)
         self.inspection_window.protocol("WM_DELETE_WINDOW", self.on_inspection_close)
 
     def on_check_camera_position_window_close(self):
