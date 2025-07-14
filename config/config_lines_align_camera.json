@@ -1,8 +1,8 @@
 {
-    "line_top": 1,
-    "line_bottom": 98,
-    "line_left": 1,
-    "line_right": 99,
+    "line_top": 2,
+    "line_bottom": 97,
+    "line_left": 2,
+    "line_right": 97,
     "gaussian_blur": 1,
     "canny_threshold1": 27,
     "canny_threshold2": 102

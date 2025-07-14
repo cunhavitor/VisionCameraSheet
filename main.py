@@ -6,7 +6,6 @@ from windows.alignment_adjust import AlignmentWindow
 from windows.camera_adjust_positions import CameraAdjustPosition
 from windows.create_leaf_mask import LeafMaskCreator
 from windows.create_users import NewUserWindow
-from windows.detect_cans_auto import AutoDetectCans
 from windows.gallery import GalleryWindow
 from windows.inspection_window import InspectionWindow
 from windows.login_window import LoginWindow
@@ -15,6 +14,8 @@ from windows.login_window import LoginWindow
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.new_user_window = None
+        self.check_camera_position_window = None
         self.login_window = None
         self.auto_can_detect_cans_window = None
         self.cap = None
@@ -73,9 +74,6 @@ class App(ctk.CTk):
                                                          command=self.open_check_camera_position_window, width=200)
         self.check_camera_psotion_button.pack(pady=(0, 10), anchor="center")
 
-        self.auto_detect_cans_button = ctk.CTkButton(self.middle_frame, text="📐 Check Camera Positions",
-                                                         command=self.open_auto_detect_cans_window, width=200)
-        self.auto_detect_cans_button.pack(pady=(0, 10), anchor="center")
 
         # --- Coluna da direita (coluna 2) ---
         self.right_frame = ctk.CTkFrame(self.main_frame)
@@ -99,7 +97,7 @@ class App(ctk.CTk):
         self.mask_window_button.configure(state="disabled")
         self.alignment_adjust_window_button.configure(state="disabled")
         self.check_camera_psotion_button.configure(state="disabled")
-        self.auto_detect_cans_button.configure(state="disabled")
+       
 
     def open_adjust_positions(self):
         self.withdraw()  # Esconde a janela principal
@@ -119,11 +117,6 @@ class App(ctk.CTk):
         self.withdraw()  # Esconde a janela principal
         self.check_camera_position_window = CameraAdjustPosition(parent=self, image_path="data/raw/fba_template_persp.jpg")
         self.check_camera_position_window.protocol("WM_DELETE_WINDOW", self.on_check_camera_position_window_close)
-
-    def open_auto_detect_cans_window(self):
-        self.withdraw()  # Esconde a janela principal
-        self.auto_can_detect_cans_window = AutoDetectCans(parent=self, image_path="data/raw/fba_template_persp.jpg")
-        self.auto_can_detect_cans_window.protocol("WM_DELETE_WINDOW", self.on_auto_detect_cans_window_close)
 
     def open_login_window(self):
         self.withdraw()  # Esconde a janela principal
@@ -145,7 +138,7 @@ class App(ctk.CTk):
             self.mask_window_button.configure(state="disabled")
             self.alignment_adjust_window_button.configure(state="disabled")
             self.check_camera_psotion_button.configure(state="disabled")
-            self.auto_detect_cans_button.configure(state="disabled")
+
 
         elif self.user_type == "Admin":
             self.new_user_button.configure(state="normal")
@@ -161,7 +154,7 @@ class App(ctk.CTk):
             self.mask_window_button.configure(state="normal")
             self.alignment_adjust_window_button.configure(state="normal")
             self.check_camera_psotion_button.configure(state="normal")
-            self.auto_detect_cans_button.configure(state="normal")
+           
 
     def on_login_window_close(self):
         self.deiconify()  # Mostra a janela principal de novo
@@ -189,11 +182,7 @@ class App(ctk.CTk):
         self.inspection_window.protocol("WM_DELETE_WINDOW", self.on_inspection_close)
 
     def on_check_camera_position_window_close(self):
-        self.auto_can_detect_cans_window.destroy()
-        self.deiconify()  # Mostra a janela principal de novo
-
-    def on_auto_detect_cans_window_close(self):
-        self.auto_can_detect_cans_window.destroy()
+        self.check_camera_position_window.destroy()
         self.deiconify()  # Mostra a janela principal de novo
 
     def on_inspection_close(self):

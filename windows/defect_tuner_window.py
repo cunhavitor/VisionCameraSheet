@@ -5,7 +5,6 @@ from datetime import datetime
 
 import customtkinter as ctk
 import cv2
-import matplotlib.pyplot as plt
 from PIL import Image
 from customtkinter import CTkImage
 
@@ -23,8 +22,8 @@ class DefectTunerWindow(ctk.CTkToplevel):
         self.user_type=user_type
         self.user_name=user_name
 
-        self.reopen_callback = reopen_callback
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        #self.reopen_callback = reopen_callback
+        #self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.state("zoomed")
         self.title("Ajuste de Parâmetros de Defeitos")
         center_window(self, 1050, 800)
@@ -90,40 +89,7 @@ class DefectTunerWindow(ctk.CTkToplevel):
         self._create_buttons()
         self._update_preview()
 
-    def _on_close(self):
-        print("🔁 Tuner fechado, a reabrir inspection...")
 
-        # Cancelar possíveis afters do matplotlib
-        if hasattr(self, "canvas_plot") and self.canvas_plot:
-            try:
-                self.canvas_plot.get_tk_widget().after_cancel(self.canvas_plot._idle_draw_id)
-            except Exception as e:
-                print(f"[CanvasPlot] Nenhum after para cancelar ou erro: {e}")
-
-        # Fechar a figura e destruir o canvas
-        try:
-            if self.canvas_plot:
-                self.canvas_plot.get_tk_widget().pack_forget()
-                self.canvas_plot.get_tk_widget().destroy()
-                self.canvas_plot = None
-            if self.fig:
-                plt.close(self.fig)
-        except Exception as e:
-            print(f"[Erro ao fechar o canvas_plot] {e}")
-
-        # Finaliza tarefas pendentes
-        try:
-            self.update_idletasks()
-        except:
-            pass
-
-        self.destroy()
-
-        if self.reopen_callback:
-            try:
-                self.reopen_callback()
-            except Exception as e:
-                print(f"[Erro no reopen_callback] {e}")
 
     def _create_sliders(self):
         self.dark_threshold_entry = create_param_entry(

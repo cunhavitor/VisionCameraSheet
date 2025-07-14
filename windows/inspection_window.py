@@ -290,9 +290,11 @@ class InspectionWindow(ctk.CTkToplevel):
     def _on_tuner_close(self):
         self.deiconify()  # Reabre a janela de inspeção
         self.state("zoomed")
-        self._recalculate_defects()
         self._load_params()
-        self._update_defect_image()
+        self._analisar_latas_com_defeito()
+        #self._recalculate_defects()
+
+        #self._update_defect_image()
 
     def _atualizar_preview(self):
         s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
@@ -337,7 +339,8 @@ class InspectionWindow(ctk.CTkToplevel):
         self.lbl_img.configure(image=self.tk_defect)
         self.lbl_img.image = self.tk_defect
         self._analisar_latas_com_defeito()
-
+        #self._recalculate_defects()
+        #self._update_defect_image()
 
     def _toggle_defect_contours(self):
         self.show_defect_contours = self.show_contours_var.get()
