@@ -28,7 +28,6 @@ def _prepare_image(img_cv, size, draw_contours=None):
 
     return CTkImage(light_image=pil, dark_image=pil, size=size)
 
-
 def _prepare_image_grayscale(img_cv, size, draw_contours=None):
     # redimensiona e converte para grayscale CTkImage; opcionalmente desenha contornos
     resized = cv2.resize(img_cv, size)
@@ -51,17 +50,6 @@ def _prepare_image_grayscale(img_cv, size, draw_contours=None):
             draw.line(pts + [pts[0]], fill="red", width=2)
 
     return CTkImage(light_image=pil, dark_image=pil, size=size)
-
-
-def _validate_numeric(value_if_allowed):
-    if value_if_allowed == "":
-        return True
-    try:
-        int(value_if_allowed)
-        return True
-    except ValueError:
-        return False
-
 
 class InspectionWindow(ctk.CTkToplevel):
     def __init__(self, parent, template_path, current_path, mask_path, user_type="User", user=""):
@@ -99,7 +87,6 @@ class InspectionWindow(ctk.CTkToplevel):
         self.user=user
 
         # load params
-
         self._load_params()
 
         self.show_defect_contours = self.show_contours_var.get()
@@ -107,6 +94,7 @@ class InspectionWindow(ctk.CTkToplevel):
         # 1) Load images and mask
         self.template_full = cv2.imread(template_path)
         self.current_full = cv2.imread(current_path)
+
         self.mask_full = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
 
         # 2) Align current image to template
@@ -138,37 +126,6 @@ class InspectionWindow(ctk.CTkToplevel):
 
         # 5) Setup UI
         self._setup_ui()
-
-    def _load_params(self):
-        # parameters adjustable (default values)
-        self.param_path = "config/inspection_params.json"
-        params = load_params(self.param_path)
-
-        self.dark_threshold = int(params.get("dark_threshold", 30))
-        self.bright_threshold = int(params.get("bright_threshold", 30))
-        self.dark_morph_kernel_size = int(params.get("dark_morph_kernel_size", 3))
-        self.dark_morph_iterations = int(params.get("dark_morph_iterations", 1))
-        self.bright_morph_kernel_size = int(params.get("bright_morph_kernel_size", 3))
-        self.bright_morph_iterations = int(params.get("bright_morph_iterations", 1))
-        self.min_defect_area = int(params.get("detect_area", 1))
-        self.dark_gradient_threshold = int(params.get("dark_gradient_threshold", 10))
-        self.blue_threshold = int(params.get("blue_threshold", 25))
-        self.red_threshold = int(params.get("red_threshold", 25))
-
-        # Initialize all StringVar and BooleanVar objects here
-        self.dark_threshold_var = ctk.StringVar(value=str(self.dark_threshold))
-        self.bright_threshold_var = ctk.StringVar(value=str(self.bright_threshold))
-        self.dark_kernel_var = ctk.StringVar(value=str(self.dark_morph_kernel_size))
-        self.dark_iterations_var = ctk.StringVar(value=str(self.dark_morph_iterations))
-        self.bright_kernel_var = ctk.StringVar(value=str(self.bright_morph_kernel_size))
-        self.bright_iterations_var = ctk.StringVar(value=str(self.bright_morph_iterations))
-        self.min_defect_area_var = ctk.StringVar(value=str(self.min_defect_area))
-        self.total_defects_var = ctk.StringVar(value="0")
-        self.show_contours_var = ctk.BooleanVar(value=True)
-        self.dark_gradient_threshold_var = ctk.StringVar(value=str(self.dark_gradient_threshold))
-        # --- NEW VARS FOR COLOR THRESHOLDS ---
-        self.blue_threshold_var = ctk.StringVar(value=str(self.blue_threshold))
-        self.red_threshold_var = ctk.StringVar(value=str(self.red_threshold))
 
     # --- _setup_ui method (remains mostly as you had it, no changes needed inside it anymore) ---
     def _setup_ui(self):
@@ -274,6 +231,37 @@ class InspectionWindow(ctk.CTkToplevel):
             self.dark_gradient_threshold_entry.configure(state="disabled", fg_color="gray70")
             self.min_defect_area_entry.configure(state="disabled", fg_color="gray70")
 
+    def _load_params(self):
+        # parameters adjustable (default values)
+        self.param_path = "config/inspection_params.json"
+        params = load_params(self.param_path)
+
+        self.dark_threshold = int(params.get("dark_threshold", 30))
+        self.bright_threshold = int(params.get("bright_threshold", 30))
+        self.dark_morph_kernel_size = int(params.get("dark_morph_kernel_size", 3))
+        self.dark_morph_iterations = int(params.get("dark_morph_iterations", 1))
+        self.bright_morph_kernel_size = int(params.get("bright_morph_kernel_size", 3))
+        self.bright_morph_iterations = int(params.get("bright_morph_iterations", 1))
+        self.min_defect_area = int(params.get("detect_area", 1))
+        self.dark_gradient_threshold = int(params.get("dark_gradient_threshold", 10))
+        self.blue_threshold = int(params.get("blue_threshold", 25))
+        self.red_threshold = int(params.get("red_threshold", 25))
+
+        # Initialize all StringVar and BooleanVar objects here
+        self.dark_threshold_var = ctk.StringVar(value=str(self.dark_threshold))
+        self.bright_threshold_var = ctk.StringVar(value=str(self.bright_threshold))
+        self.dark_kernel_var = ctk.StringVar(value=str(self.dark_morph_kernel_size))
+        self.dark_iterations_var = ctk.StringVar(value=str(self.dark_morph_iterations))
+        self.bright_kernel_var = ctk.StringVar(value=str(self.bright_morph_kernel_size))
+        self.bright_iterations_var = ctk.StringVar(value=str(self.bright_morph_iterations))
+        self.min_defect_area_var = ctk.StringVar(value=str(self.min_defect_area))
+        self.total_defects_var = ctk.StringVar(value="0")
+        self.show_contours_var = ctk.BooleanVar(value=True)
+        self.dark_gradient_threshold_var = ctk.StringVar(value=str(self.dark_gradient_threshold))
+        # --- NEW VARS FOR COLOR THRESHOLDS ---
+        self.blue_threshold_var = ctk.StringVar(value=str(self.blue_threshold))
+        self.red_threshold_var = ctk.StringVar(value=str(self.red_threshold))
+
     def open_tuner_window(self):
         self.withdraw()  # Esconde a janela de inspeção
         self.tuner_window = DefectTunerWindow(
@@ -373,8 +361,8 @@ class InspectionWindow(ctk.CTkToplevel):
         try:
             with open("data/mask/forma_base.json", "r") as f:
                 forma_base = json.load(f)  # lista de [x, y]
-        except:
-            print("❌ Erro ao carregar forma base.")
+        except Exception as e:
+            print("❌ Erro ao carregar forma base:", e)
             return
 
         # Carrega instâncias
@@ -385,15 +373,20 @@ class InspectionWindow(ctk.CTkToplevel):
                     parts = line.strip().split(":")
                     if len(parts) != 2:
                         continue
-                    idx, rest = parts
-                    cx, cy, s, numero_lata = rest.split(",")
+                    idx_str, rest = parts
+                    cx_str, cy_str, s_str = rest.split(",")
+                    idx = int(idx_str)
+                    cx = int(cx_str)
+                    cy = int(cy_str)
+                    s = float(s_str)
+
                     instancias.append({
-                        "center": (int(cx), int(cy)),
-                        "scale": float(s),
-                        "numero_lata": int(numero_lata)
+                        "center": (cx, cy),
+                        "scale": s,
+                        "numero_lata": idx  # Usa o índice como número da lata
                     })
-        except:
-            print("❌ Erro ao carregar instâncias.")
+        except Exception as e:
+            print("❌ Erro ao carregar instâncias:", e)
             return
 
         # Calcula os polígonos reais
@@ -423,7 +416,8 @@ class InspectionWindow(ctk.CTkToplevel):
                     break
 
         if latas_com_defeito:
-            texto = f"⚠️ Latas com defeitos: {self.total_defects_var.get()}\n\r" + ", ".join(str(n) for n in sorted(latas_com_defeito))
+            texto = f"⚠️ Latas com defeitos: {self.total_defects_var.get()}\n\r" + ", ".join(
+                str(n) for n in sorted(latas_com_defeito))
         else:
             texto = "✅ Nenhum defeito dentro das latas detectado."
 

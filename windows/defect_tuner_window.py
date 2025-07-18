@@ -28,6 +28,8 @@ class DefectTunerWindow(ctk.CTkToplevel):
         self.title("Ajuste de Parâmetros de Defeitos")
         center_window(self, 1050, 800)
 
+        self.bind("<space>", self._on_space_key)
+
         self.tpl = tpl_img
         self.aligned = aligned_img
         self.mask = mask
@@ -155,7 +157,7 @@ class DefectTunerWindow(ctk.CTkToplevel):
 
         self.defect_count_label = ctk.CTkLabel(container1, text="", font=("Arial", 16))
         self.defect_count_label.pack(pady=(10, 10), padx=(10, 10), side="left")
-        ctk.CTkButton(container1, text="Atualizar Detecção",
+        ctk.CTkButton(container1, text="Atualizar Detecção (SPACE)",
                       command=self._update_preview).pack(pady=(10, 10), padx=(10, 10), side="right")
 
         container2 = ctk.CTkFrame(self.control_frame, fg_color="gray")
@@ -422,37 +424,43 @@ class DefectTunerWindow(ctk.CTkToplevel):
 
     def _on_dark_threshold_change(self, new_value=None):
         self.last_changed_param = "dark_threshold"
-        self._update_preview()
+        #self._update_preview()
 
     def _on_bright_threshold_change(self, new_value=None):
         self.last_changed_param = "bright_threshold"
-        self._update_preview()
+        #self._update_preview()
 
     def _on_blue_threshold_change(self, new_value=None):
         self.last_changed_param = "blue_threshold"
-        self._update_preview()
+        #self._update_preview()
 
     def _on_red_threshold_change(self, new_value=None):
         self.last_changed_param = "red_threshold"
-        self._update_preview()
+        #self._update_preview()
 
     def _on_dark_kernel_change(self, new_value=None):
-
-        self._update_preview()
+        '''teste'''
+        #self._update_preview()
 
     def _on_dark_iterations_change(self, new_value=None):
-
-        self._update_preview()
+        '''teste'''
+        #self._update_preview()
 
     def _on_bright_kernel_change(self, new_value=None):
-        self._update_preview()
+        '''teste'''
+        #self._update_preview()
 
     def _on_bright_iterations_change(self, new_value=None):
-        self._update_preview()
+        '''teste'''
+        #self._update_preview()
 
     def _on_dark_gradient_threshold_change(self, new_value=None):
         self.last_changed_param = "dark_gradient_threshold"
-        self._update_preview()
+        #self._update_preview()
 
     def _on_min_defect_area_change(self, new_value=None):
+        '''teste'''
+        #self._update_preview()
+
+    def _on_space_key(self, event):
         self._update_preview()

@@ -142,6 +142,10 @@ def detect_defects(tpl, aligned, mask,
     end_time = time.time()
     print(f"detect_defects took {end_time - start_time:.4f} seconds")
 
+    #cv2.imshow("Blue Mask", blue_mask)
+    #cv2.imshow("Red Mask", red_mask)
+    #cv2.imshow("Dark Mask", darker_mask_filtered)
+    #cv2.imshow("Brighter Mask", brighter_mask)
     # Return all intermediate masks for debugging/visualization
     return final_defect_mask, filtered_contours, darker_mask_filtered, brighter_mask, blue_mask, red_mask
 

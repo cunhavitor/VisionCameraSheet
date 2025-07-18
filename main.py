@@ -30,6 +30,8 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("dark")
         self.user_type=""
         self.user=""
+
+
         # Layout principal
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
@@ -100,8 +102,9 @@ class App(ctk.CTk):
        
 
     def open_adjust_positions(self):
+        template_path = "data/raw/fba_template.jpg"
         self.withdraw()  # Esconde a janela principal
-        self.adjust_window = AdjustPositionsWindow(self)
+        self.adjust_window = AdjustPositionsWindow(self, template_path= template_path)
         self.adjust_window.protocol("WM_DELETE_WINDOW", self.on_adjust_positions_close)
 
     def on_adjust_positions_close(self):
