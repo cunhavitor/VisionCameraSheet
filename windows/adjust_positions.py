@@ -222,6 +222,7 @@ class AdjustPositionsWindow(ctk.CTkToplevel):
             data = json.load(f)
         return data  # Lista de pontos normalizados (entre 0 e 1)
 
+
     def draw_polygon_on_box(self, image, box, base_shape):
         """
         Desenha a forma base ajustada proporcionalmente dentro da bbox.
@@ -266,6 +267,57 @@ class AdjustPositionsWindow(ctk.CTkToplevel):
 
         cv2.polylines(image, [polygon], isClosed=True, color=(0, 255, 0), thickness=4)
 
+    # encontrar contorno, em fase de teste, com muitas falhas
+    '''def draw_polygon_on_box(self, image, box, base_shape):
+        """
+        Detecta e desenha o maior contorno dentro da caixa (box) usando inversão, OTSU e morfologia.
+        """
+        x, y, w, h = box
+        roi = image[y:y + h, x:x + w]
+
+        # Converte para escala de cinza
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+
+        # Inverte a imagem
+        img_inv = 255 - gray
+
+        # Aplica threshold com OTSU
+        _, thresh = cv2.threshold(img_inv, 15, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # Aplica fechamento morfológico
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+        thresh_closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+
+        # Detecta contornos
+        contours, _ = cv2.findContours(thresh_closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if not contours:
+            print("Nenhum contorno encontrado na região.")
+            return
+
+        # Seleciona o maior contorno
+        target_contour = max(contours, key=cv2.contourArea)
+
+        area = cv2.contourArea(target_contour)
+        print(f"Contorno selecionado (maior) com área {area:.2f} e {len(target_contour)} pontos.")
+
+        # Ajusta o contorno para coordenadas globais
+        target_contour_shifted = target_contour + np.array([[[x, y]]], dtype=np.int32)
+
+        # Desenha na imagem
+        cv2.polylines(image, [target_contour_shifted], isClosed=True, color=(0, 255, 0), thickness=4)
+
+        # Guarda como lista de pontos
+        self.polygons.append(target_contour_shifted.reshape(-1, 2).tolist())
+
+        # Centro da caixa
+        cx = int(x + w / 2)
+        cy = int(y + h / 2)
+
+        self.polygons_instances.append({
+            "points": [cx, cy],
+            "scale": 1.0  # Escala padrão
+        })'''
 
     def run_detection(self):
         self.config(cursor="watch")
