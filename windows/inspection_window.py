@@ -1,10 +1,11 @@
 import json
 import time
-from shapely.geometry import Polygon, Point
+
 import customtkinter as ctk
 import cv2
 from PIL import Image, ImageDraw
 from customtkinter import CTkImage
+from shapely.geometry import Polygon, Point
 
 from config.config import INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT
 from config.utils import load_params
@@ -12,21 +13,6 @@ from models.align_image import align_with_template
 from models.defect_detector import detect_defects
 from widgets.param_entry_hor import create_param_entry
 from windows.defect_tuner_window import DefectTunerWindow
-
-def _prepare_image(img_cv, size, draw_contours=None):
-    # redimensiona e converte para CTkImage; opcionalmente desenha contornos
-    resized = cv2.resize(img_cv, size)
-    rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-    pil = Image.fromarray(rgb)
-
-    if draw_contours:
-        draw = ImageDraw.Draw(pil)
-        sx, sy = size[0] / img_cv.shape[1], size[1] / img_cv.shape[0]
-        for cnt in draw_contours:
-            pts = [(int(pt[0][0] * sx), int(pt[0][1] * sy)) for pt in cnt]
-            draw.line(pts + [pts[0]], fill="red", width=2)
-
-    return CTkImage(light_image=pil, dark_image=pil, size=size)
 
 def _prepare_image_grayscale(img_cv, size, draw_contours=None):
     # redimensiona e converte para grayscale CTkImage; opcionalmente desenha contornos
@@ -42,8 +28,8 @@ def _prepare_image_grayscale(img_cv, size, draw_contours=None):
 
         for i, cnt in enumerate(draw_contours):
             # Calcular área e perímetro antes de desenhar
-            area = cv2.contourArea(cnt)
-            perimeter = cv2.arcLength(cnt, True)
+            #area = cv2.contourArea(cnt)
+            #perimeter = cv2.arcLength(cnt, True)
 
             # Desenhar contorno redimensionado
             pts = [(int(pt[0][0] * sx), int(pt[0][1] * sy)) for pt in cnt]
@@ -51,10 +37,17 @@ def _prepare_image_grayscale(img_cv, size, draw_contours=None):
 
     return CTkImage(light_image=pil, dark_image=pil, size=size)
 
+
 class InspectionWindow(ctk.CTkToplevel):
     def __init__(self, parent, template_path, current_path, mask_path, user_type="User", user=""):
         super().__init__(parent)
 
+        self.template_masked = None
+        self.current_masked = None
+        self.aligned_full = None
+        self.mask_full = None
+        self.current_full = None
+        self.template_full = None
         self.param_path = None
         self.tuner_window = None
         self.bright_threshold_label = None
@@ -83,46 +76,15 @@ class InspectionWindow(ctk.CTkToplevel):
         self.state("zoomed")
         self.title("Janela de Inspeção")
 
-        self.user_type=user_type
-        self.user=user
+        self.user_type = user_type
+        self.user = user
+
+        self.template_full = cv2.imread(self.template_path)
 
         # load params
         self._load_params()
 
         self.show_defect_contours = self.show_contours_var.get()
-
-        # 1) Load images and mask
-        self.template_full = cv2.imread(template_path)
-        self.current_full = cv2.imread(current_path)
-
-        self.mask_full = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-
-        # 2) Align current image to template
-        self.aligned_full, M = align_with_template(self.current_full, self.template_full)
-
-        # 3) Apply original mask (template space) to aligned image
-        self.current_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
-        self.template_masked = cv2.bitwise_and(self.template_full, self.template_full, mask=self.mask_full)
-
-        # 4) Use fixed mask to detect defects (already in aligned space)
-        # --- UPDATED CALL TO DETECT_DEFECTS ---
-        self.defect_mask, self.defect_contours, \
-        self.darker_mask_filtered, self.yellow_mask, \
-        self.blue_mask, self.red_mask = detect_defects( # <-- NEW RETURN VALUES
-            self.template_masked,
-            self.current_masked,
-            self.mask_full,
-            self.dark_threshold,
-            self.bright_threshold,
-            self.dark_morph_kernel_size,
-            self.dark_morph_iterations,
-            self.bright_morph_kernel_size,
-            self.bright_morph_iterations,
-            self.min_defect_area,
-            self.dark_gradient_threshold,
-            self.blue_threshold, # <-- NEW
-            self.red_threshold   # <-- NEW
-        )
 
         # 5) Setup UI
         self._setup_ui()
@@ -162,7 +124,7 @@ class InspectionWindow(ctk.CTkToplevel):
         self.toggle_contours = ctk.CTkSwitch(
             self.left_panel,
             text="Mostrar Contornos dos Defeitos",
-            variable=self.show_contours_var, # This variable is already initialized in __init__
+            variable=self.show_contours_var,  # This variable is already initialized in __init__
             command=self._toggle_defect_contours,
         )
         self.toggle_contours.pack(pady=10)
@@ -173,7 +135,7 @@ class InspectionWindow(ctk.CTkToplevel):
                                        text="Total de defeitos\n(verificados)",
                                        justify="left",
                                        width=100)
-        self.label_info.pack(side="left", padx=(0, 40), pady=(40,40))
+        self.label_info.pack(side="left", padx=(0, 40), pady=(40, 40))
 
         # Tuner Window
         self.button_tuner_window = ctk.CTkButton(
@@ -200,20 +162,9 @@ class InspectionWindow(ctk.CTkToplevel):
         self.area_info_textbox = ctk.CTkTextbox(self.right_panel, height=200, width=250)
         self.area_info_textbox.pack(pady=10)
 
-        # Criar tooltip para mostrar diferença no mouse
-        self.tooltip_img = ctk.CTkLabel(self.right_panel, text="", width= 150, height=150)
+        # Criar tooltip para mostrar diferença no rato
+        self.tooltip_img = ctk.CTkLabel(self.right_panel, text="", width=150, height=150)
         self.tooltip_img.pack(pady=10)
-
-        # Preparação das imagens
-        self.tk_template = _prepare_image_grayscale(self.template_masked, s)
-        self.tk_aligned = _prepare_image_grayscale(self.current_masked, s)
-
-        aligned_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full,
-                                         mask=self.mask_full)
-        self.tk_defect = _prepare_image_grayscale(aligned_masked, s, draw_contours=self.defect_contours)
-
-        self.lbl_img.configure(image=self.tk_aligned)
-        self.lbl_img.image = self.tk_aligned
 
         # Janela fixa
         self.geometry(f"{s[0] + 200}x{s[1] + 40}")
@@ -263,6 +214,19 @@ class InspectionWindow(ctk.CTkToplevel):
         self.red_threshold_var = ctk.StringVar(value=str(self.red_threshold))
 
     def open_tuner_window(self):
+        # 1) Load images and mask
+        self.template_full = cv2.imread(self.template_path)
+        self.current_full = cv2.imread(self.current_path)
+
+        self.mask_full = cv2.imread(self.mask_path, cv2.IMREAD_GRAYSCALE)
+
+        # 2) Align current image to template
+        self.aligned_full, M = align_with_template(self.current_full, self.template_full)
+
+        # 3) Apply original mask (template space) to aligned image
+        self.current_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
+        self.template_masked = cv2.bitwise_and(self.template_full, self.template_full, mask=self.mask_full)
+
         self.withdraw()  # Esconde a janela de inspeção
         self.tuner_window = DefectTunerWindow(
             master=self,
@@ -280,17 +244,30 @@ class InspectionWindow(ctk.CTkToplevel):
         self.state("zoomed")
         self._load_params()
         self._analisar_latas_com_defeito()
-        #self._recalculate_defects()
 
-        #self._update_defect_image()
-
-    def _atualizar_preview(self):
+    def _show_defects(self):
+        # Preparação das imagens
+        start_time = time.perf_counter()
         s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
 
-        # Atualiza máscaras com base em imagem atual e parâmetros
+        # 1) Load images and mask
+
+        self.current_full = cv2.imread(self.current_path)
+
+        self.mask_full = cv2.imread(self.mask_path, cv2.IMREAD_GRAYSCALE)
+
+        # 2) Align current image to template
+        self.aligned_full, M = align_with_template(self.current_full, self.template_full)
+
+        # 3) Apply original mask (template space) to aligned image
+        self.current_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
+        self.template_masked = cv2.bitwise_and(self.template_full, self.template_full, mask=self.mask_full)
+
+        # 4) Use fixed mask to detect defects (already in aligned space)
+        # --- UPDATED CALL TO DETECT_DEFECTS ---
         self.defect_mask, self.defect_contours, \
             self.darker_mask_filtered, self.yellow_mask, \
-            self.blue_mask, self.red_mask = detect_defects(
+            self.blue_mask, self.red_mask = detect_defects(  # <-- NEW RETURN VALUES
             self.template_masked,
             self.current_masked,
             self.mask_full,
@@ -302,59 +279,44 @@ class InspectionWindow(ctk.CTkToplevel):
             self.bright_morph_iterations,
             self.min_defect_area,
             self.dark_gradient_threshold,
-            self.blue_threshold,
-            self.red_threshold
+            self.blue_threshold,  # <-- NEW
+            self.red_threshold  # <-- NEW
         )
 
-        # Atualiza imagens
+        self.tk_template = _prepare_image_grayscale(self.template_masked, s)
         self.tk_aligned = _prepare_image_grayscale(self.current_masked, s)
-        self.tk_defect = _prepare_image_grayscale(
-            cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full),
-            s,
-            draw_contours=self.defect_contours if self.show_contours_var.get() else None
-        )
 
-        # Aplica imagem base no label
-        if self.toggle.get():
-            self.lbl_img.configure(image=self.tk_template)
+        aligned_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full,
+                                         mask=self.mask_full)
+        self.tk_defect = _prepare_image_grayscale(aligned_masked, s, draw_contours=self.defect_contours)
+
+        self.lbl_img.image = self.tk_aligned
+
+        self.total_defects_var.set(str(len(self.defect_contours)))
+
+        self.lbl_img.image = self.tk_defect
+        self._analisar_latas_com_defeito()
+
+        if self.toggle_contours.get():
+            self.lbl_img.configure(image=self.tk_defect)
             self.lbl_img.image = self.tk_template
         else:
             self.lbl_img.configure(image=self.tk_aligned)
             self.lbl_img.image = self.tk_aligned
 
-    def _show_defects(self):
-        self.total_defects_var.set(str(len(self.defect_contours)))
-        self.lbl_img.configure(image=self.tk_defect)
-        self.lbl_img.image = self.tk_defect
-        self._analisar_latas_com_defeito()
-        #self._recalculate_defects()
-        #self._update_defect_image()
+        end_time = time.perf_counter()
+
+        print(f"Show Defects demorou {end_time - start_time:.4f} segundos")
 
     def _toggle_defect_contours(self):
         self.show_defect_contours = self.show_contours_var.get()
-        self._atualizar_preview()
-        self._show_defects()
 
-    def _recalculate_defects(self):
-        # --- UPDATED CALL TO DETECT_DEFECTS ---
-        self.defect_mask, self.defect_contours, \
-        self.darker_mask_filtered, self.yellow_mask, \
-        self.blue_mask, self.red_mask = detect_defects( # <-- NEW RETURN VALUES
-            self.template_masked,
-            self.current_masked,
-            self.mask_full,
-            self.dark_threshold,
-            self.bright_threshold,
-            self.dark_morph_kernel_size,
-            self.dark_morph_iterations,
-            self.bright_morph_kernel_size,
-            self.bright_morph_iterations,
-            self.min_defect_area,
-            self.dark_gradient_threshold,
-            self.blue_threshold, # <-- NEW
-            self.red_threshold   # <-- NEW
-        )
-        self._update_defect_image()
+        if self.toggle_contours.get():
+            self.lbl_img.configure(image=self.tk_defect)
+            self.lbl_img.image = self.tk_template
+        else:
+            self.lbl_img.configure(image=self.tk_aligned)
+            self.lbl_img.image = self.tk_aligned
 
     def _analisar_latas_com_defeito(self):
         # Carrega forma base
@@ -403,11 +365,11 @@ class InspectionWindow(ctk.CTkToplevel):
         # Analisa defeitos
         latas_com_defeito = set()
         for cnt in self.defect_contours:
-            M = cv2.moments(cnt)
-            if M["m00"] == 0:
+            m = cv2.moments(cnt)
+            if m["m00"] == 0:
                 continue
-            cx = int(M["m10"] / M["m00"])
-            cy = int(M["m01"] / M["m00"])
+            cx = int(m["m10"] / m["m00"])
+            cy = int(m["m01"] / m["m00"])
             ponto_defeito = Point(cx, cy)
 
             for pol in poligonos:
@@ -428,25 +390,6 @@ class InspectionWindow(ctk.CTkToplevel):
         self.area_info_textbox.configure(state="disabled")
         print(texto)
 
-    def _update_defect_image(self):
-        start_time = time.time()
-        s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
-        self.total_defects_var.set(str(len(self.defect_contours)))
-
-        if self.show_defect_contours:
-            aligned_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
-            self.tk_defect = _prepare_image_grayscale(aligned_masked, s, draw_contours=self.defect_contours)
-        else:
-            aligned_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
-            self.tk_defect = _prepare_image_grayscale(aligned_masked, s)
-
-        self._show_defects()
-        self._update_defect_image()
-
-        end_time = time.time()
-
-        print(f"_detect_defects demorou {end_time - start_time:.4f} segundos")
-
     def on_mouse_move(self, event):
         x, y = event.x, event.y
 
@@ -460,7 +403,7 @@ class InspectionWindow(ctk.CTkToplevel):
         img_x = int(x * img_w / lbl_w)
         img_y = int(y * img_h / lbl_h)
 
-        # Limita área 50x50 para zoom
+        # Limita área 50x50 para "zoom"
         x1 = max(img_x - 10, 0)
         y1 = max(img_y - 10, 0)
         x2 = min(img_x + 10, img_w)
@@ -470,26 +413,25 @@ class InspectionWindow(ctk.CTkToplevel):
         tpl_gray = cv2.cvtColor(self.template_full, cv2.COLOR_BGR2GRAY)
         cur_gray = cv2.cvtColor(self.current_full, cv2.COLOR_BGR2GRAY)
 
-        region_tpl = tpl_gray[y1:y2, x1:x2]
+        #region_tpl = tpl_gray[y1:y2, x1:x2]
         region_cur = cur_gray[y1:y2, x1:x2]
 
         # Point values
         tpl_gray_val = int(tpl_gray[img_y, img_x])
         cur_gray_val = int(cur_gray[img_y, img_x])
-        dark_diff_val = tpl_gray_val - cur_gray_val # Difference for darker defects
+        dark_diff_val = tpl_gray_val - cur_gray_val  # Difference for darker defects
 
         tpl_lab = cv2.cvtColor(self.template_full, cv2.COLOR_BGR2LAB)
         cur_lab = cv2.cvtColor(self.current_full, cv2.COLOR_BGR2LAB)
-        tpl_a_val = int(tpl_lab[img_y, img_x, 1]) # A channel value
+        tpl_a_val = int(tpl_lab[img_y, img_x, 1])  # A channel value
         cur_a_val = int(cur_lab[img_y, img_x, 1])
-        tpl_b_val = int(tpl_lab[img_y, img_x, 2]) # B channel value
+        tpl_b_val = int(tpl_lab[img_y, img_x, 2])  # B channel value
         cur_b_val = int(cur_lab[img_y, img_x, 2])
 
         # Differences for tooltip display
-        yellow_diff = cur_b_val - tpl_b_val # Positive if more yellow
-        blue_diff = tpl_b_val - cur_b_val   # Positive if more blue (template B > current B)
-        red_diff = cur_a_val - tpl_a_val    # Positive if more red (current A > template A)
-
+        yellow_diff = cur_b_val - tpl_b_val  # Positive if more yellow
+        blue_diff = tpl_b_val - cur_b_val  # Positive if more blue (template B > current B)
+        red_diff = cur_a_val - tpl_a_val  # Positive if more red (current A > template A)
 
         # Valor da máscara geral
         mask_val = self.mask_full[img_y, img_x]
@@ -497,15 +439,14 @@ class InspectionWindow(ctk.CTkToplevel):
         # Intermediate masks for debugging/info
         try:
             darker_mask_val = self.darker_mask_filtered[img_y, img_x]
-            yellow_mask_val = self.yellow_mask[img_y, img_x] # Renamed from bright_mask_val for clarity
-            blue_mask_val = self.blue_mask[img_y, img_x]     # <-- NEW
-            red_mask_val = self.red_mask[img_y, img_x]       # <-- NEW
-        except AttributeError: # Handles initial state before masks are fully processed
+            yellow_mask_val = self.yellow_mask[img_y, img_x]  # Renamed from bright_mask_val for clarity
+            blue_mask_val = self.blue_mask[img_y, img_x]  # <-- NEW
+            red_mask_val = self.red_mask[img_y, img_x]  # <-- NEW
+        except AttributeError:  # Handles initial state before masks are fully processed
             darker_mask_val = "-"
             yellow_mask_val = "-"
             blue_mask_val = "-"
             red_mask_val = "-"
-
 
         # Prepara imagem em zoom
         zoom_img = cv2.resize(region_cur, (150, 150), interpolation=cv2.INTER_NEAREST)
@@ -521,15 +462,15 @@ class InspectionWindow(ctk.CTkToplevel):
             f"Coords: ({img_x},{img_y})\n"
             f"Máscara Ativa: {mask_val}\n"
             f"Pix (T,C): ({tpl_gray_val},{cur_gray_val}) Δ={dark_diff_val}\n"
-            f"LAB A (T,C): ({tpl_a_val},{cur_a_val}) Δ={red_diff} (Vermelho)\n" # <-- NEW LAB A info
-            f"LAB B (T,C): ({tpl_b_val},{cur_b_val}) Δ={yellow_diff} (Amarelo)\n" # <-- Updated LAB B for yellow
-            f"                  Δ={blue_diff} (Azul)\n" # <-- New LAB B info for blue
+            f"LAB A (T,C): ({tpl_a_val},{cur_a_val}) Δ={red_diff} (Vermelho)\n"  # <-- NEW LAB A info
+            f"LAB B (T,C): ({tpl_b_val},{cur_b_val}) Δ={yellow_diff} (Amarelo)\n"  # <-- Updated LAB B for yellow
+            f"                  Δ={blue_diff} (Azul)\n"  # <-- New LAB B info for blue
             f"Th Escuro: {self.dark_threshold} (Mask={darker_mask_val})\n"
-            f"Th Amarelo: {self.bright_threshold} (Mask={yellow_mask_val})\n" # <-- Updated Label
-            f"Th Azul: {self.blue_threshold} (Mask={blue_mask_val})\n"         # <-- NEW
-            f"Th Vermelho: {self.red_threshold} (Mask={red_mask_val})\n"     # <-- NEW
+            f"Th Amarelo: {self.bright_threshold} (Mask={yellow_mask_val})\n"  # <-- Updated Label
+            f"Th Azul: {self.blue_threshold} (Mask={blue_mask_val})\n"  # <-- NEW
+            f"Th Vermelho: {self.red_threshold} (Mask={red_mask_val})\n"  # <-- NEW
             f"K/It Escuro: {self.dark_morph_kernel_size}/{self.dark_morph_iterations}\n"
-            f"K/It Colorido: {self.bright_morph_kernel_size}/{self.bright_morph_iterations}\n" # <-- Updated Label
+            f"K/It Colorido: {self.bright_morph_kernel_size}/{self.bright_morph_iterations}\n"  # <-- Updated Label
             f"Gradiente Escuro: {self.dark_gradient_threshold}\n"
             f"Área mín: {self.min_defect_area}"
         )
@@ -538,104 +479,12 @@ class InspectionWindow(ctk.CTkToplevel):
         self.area_info_textbox.insert("0.0", text)
         self.area_info_textbox.configure(state="disabled")
 
-    # --- NEW: Separate Change Handlers for Dark Morphology ---
-    def _on_dark_kernel_change(self, event):
-        val = self.dark_kernel_var.get()
-        if val != "":
-            k = int(val)
-            # The actual kernel size correction is now done inside detect_defects
-            k = max(1, min(k, 15)) # Clamp value
-            self.dark_morph_kernel_size = k
-            self.dark_kernel_label.configure(text=f"Kernel Escuro: {self.dark_morph_kernel_size}")
-            self._recalculate_defects()
-            self._save_params()
-            if str(k) != val:
-                self.dark_kernel_var.set(str(k)) # Update entry if value was clamped
-
-    def _on_blue_threshold_change(self, event):
-        val = self.blue_threshold_var.get()
-        if val != "":
-            self.blue_threshold = int(val)
-            self.blue_threshold_label.configure(text=f"Threshold Azul: {self.blue_threshold}")
-            self._recalculate_defects()
-            self._save_params()
-
-    def _on_red_threshold_change(self, event):
-        val = self.red_threshold_var.get()
-        if val != "":
-            self.red_threshold = int(val)
-            self.red_threshold_label.configure(text=f"Threshold Vermelho: {self.red_threshold}")
-            self._recalculate_defects()
-            self._save_params()
-
-    def _on_dark_iterations_change(self, event):
-        val = self.dark_iterations_var.get()
-        if val != "":
-            i = int(val)
-            i = max(1, min(i, 10)) # Clamp value
-            self.dark_morph_iterations = i
-            self.dark_iterations_label.configure(text=f"Iterações Escuro: {self.dark_morph_iterations}")
-            self._recalculate_defects()
-            self._save_params()
-            if str(i) != val:
-                self.dark_iterations_var.set(str(i))
-
-    # --- NEW: Separate Change Handlers for Bright Morphology ---
-    def _on_bright_kernel_change(self, event):
-        val = self.bright_kernel_var.get()
-        if val != "":
-            k = int(val)
-            # The actual kernel size correction is now done inside detect_defects
-            k = max(1, min(k, 15)) # Clamp value
-            self.bright_morph_kernel_size = k
-            self.bright_kernel_label.configure(text=f"Kernel Claro: {self.bright_morph_kernel_size}")
-            self._recalculate_defects()
-            self._save_params()
-            if str(k) != val:
-                self.bright_kernel_var.set(str(k))
-
-    def _on_bright_iterations_change(self, event):
-        val = self.bright_iterations_var.get()
-        if val != "":
-            i = int(val)
-            i = max(1, min(i, 10)) # Clamp value
-            self.bright_morph_iterations = i
-            self.bright_iterations_label.configure(text=f"Iterações Claro: {self.bright_morph_iterations}")
-            self._recalculate_defects()
-            self._save_params()
-            if str(i) != val:
-                self.bright_iterations_var.set(str(i))
-
-    # Existing change handlers for thresholds and min_defect_area
-    def _on_dark_threshold_change(self, event):
-        val = self.dark_threshold_var.get()
-        if val != "":
-            self.dark_threshold = int(val)
-            self.dark_threshold_label.configure(text=f"Threshold Escuro: {self.dark_threshold}")
-            self._recalculate_defects()
-            self._save_params()
-    def _on_dark_gradient_threshold_change(self, event):
-        val = self.dark_gradient_threshold_var.get()
-        if val != "":
-            self.dark_gradient_threshold = int(val)
-            self.dark_gradient_threshold.configure(text=f"Gradient Threshold Escuro: {self.dark_gradient_threshold}")
-            self._recalculate_defects()
-            self._save_params()
-
-    def _on_bright_threshold_change(self, event):
-        val = self.bright_threshold_var.get()
-        if val != "":
-            self.bright_threshold = int(val)
-            self.bright_threshold_label.configure(text=f"Threshold Claro: {self.bright_threshold}")
-            self._recalculate_defects()
-            self._save_params()
-
     def _on_min_defect_area_change(self, event):
         val = self.min_defect_area_var.get()
         if val != "":
             self.min_defect_area = int(val)
             self.min_defect_area_label.configure(text=f"Tamanho mín. defeito: {self.min_defect_area}")
-            self._recalculate_defects()
+            self._show_defects()
             self._save_params()
 
     def _toggle_image(self):
@@ -646,13 +495,12 @@ class InspectionWindow(ctk.CTkToplevel):
             self.lbl_img.configure(image=self.tk_aligned)
             self.lbl_img.image = self.tk_aligned
 
-
     def _save_params(self):
         params = {
             "dark_threshold": self.dark_threshold,
             "bright_threshold": self.bright_threshold,
-            "blue_threshold": self.blue_threshold, # <-- NEW
-            "red_threshold": self.red_threshold,   # <-- NEW
+            "blue_threshold": self.blue_threshold,  # <-- NEW
+            "red_threshold": self.red_threshold,  # <-- NEW
             "dark_morph_kernel_size": self.dark_morph_kernel_size,
             "dark_morph_iterations": self.dark_morph_iterations,
             "bright_morph_kernel_size": self.bright_morph_kernel_size,

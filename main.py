@@ -28,9 +28,8 @@ class App(ctk.CTk):
         self.title("Detection Lito Errors")
         center_window(self, 800, 600)
         ctk.set_appearance_mode("dark")
-        self.user_type=""
-        self.user=""
-
+        self.user_type = ""
+        self.user = ""
 
         # Layout principal
         self.main_frame = ctk.CTkFrame(self)
@@ -43,13 +42,14 @@ class App(ctk.CTk):
         self.user_frame.grid_propagate(False)
 
         self.status_label = ctk.CTkLabel(self.user_frame, text="Usuário:", width=140, wraplength=140,
-            text_color="white", font=("Arial", 20))
+                                         text_color="white", font=("Arial", 20))
         self.status_label.pack(side="top", pady=10)
 
         self.login_button = ctk.CTkButton(self.user_frame, text="Login", width=200, command=self.open_login_window)
         self.login_button.pack(pady=(10, 10), anchor="center")
 
-        self.new_user_button = ctk.CTkButton(self.user_frame, text="Novo User", width=200, command=self.open_new_user_window)
+        self.new_user_button = ctk.CTkButton(self.user_frame, text="Novo User", width=200,
+                                             command=self.open_new_user_window)
         self.new_user_button.pack(pady=(0, 10), anchor="center")
 
         # --- Coluna do meio (coluna 1) ---
@@ -57,40 +57,39 @@ class App(ctk.CTk):
         self.middle_frame.grid(row=0, column=1, sticky="nsew", pady=20, padx=20)
 
         self.status_label = ctk.CTkLabel(self.middle_frame, text="Settings:", width=140, wraplength=140,
-            text_color="white", font=("Arial", 20))
+                                         text_color="white", font=("Arial", 20))
         self.status_label.pack(side="top", pady=10)
 
         self.adjust_positions_button = ctk.CTkButton(self.middle_frame, text="🛠️ Adjust Positions",
-            command=self.open_adjust_positions, width=200)
+                                                     command=self.open_adjust_positions, width=200)
         self.adjust_positions_button.pack(pady=(0, 10), anchor="center")
 
         self.mask_window_button = ctk.CTkButton(self.middle_frame, text="🎭 Máscara", command=self.open_mask_window,
-            width=200)
+                                                width=200)
         self.mask_window_button.pack(pady=(0, 10), anchor="center")
 
         self.alignment_adjust_window_button = ctk.CTkButton(self.middle_frame, text="↔️ Alignment Adjust",
-            command=self.open_alignment_adjust_window, width=200)
+                                                            command=self.open_alignment_adjust_window, width=200)
         self.alignment_adjust_window_button.pack(pady=(0, 10), anchor="center")
 
         self.check_camera_psotion_button = ctk.CTkButton(self.middle_frame, text="📐 Check Camera Positions",
                                                          command=self.open_check_camera_position_window, width=200)
         self.check_camera_psotion_button.pack(pady=(0, 10), anchor="center")
 
-
         # --- Coluna da direita (coluna 2) ---
         self.right_frame = ctk.CTkFrame(self.main_frame)
         self.right_frame.grid(row=0, column=2, sticky="nsew", pady=20, padx=20)
 
         self.status_label = ctk.CTkLabel(self.right_frame, text="Inspeção:", width=140, wraplength=140,
-            text_color="white", font=("Arial", 20))
+                                         text_color="white", font=("Arial", 20))
         self.status_label.pack(side="top", pady=10)
 
         self.gallery_button = ctk.CTkButton(self.right_frame, text="📂 Ver Galeria", command=self.open_gallery,
-            width=200)
+                                            width=200)
         self.gallery_button.pack(pady=(0, 10), anchor="center")
 
         self.inspect_button = ctk.CTkButton(self.right_frame, text="👁️ Inspecção", command=self.open_inspection,
-            width=200)
+                                            width=200)
         self.inspect_button.pack(pady=(0, 10), anchor="center")
 
         self.new_user_button.configure(state="disabled")
@@ -99,16 +98,72 @@ class App(ctk.CTk):
         self.mask_window_button.configure(state="disabled")
         self.alignment_adjust_window_button.configure(state="disabled")
         self.check_camera_psotion_button.configure(state="disabled")
-       
+
+    def open_login_window(self):
+        self.withdraw()  # Esconde a janela principal
+        self.login_window = LoginWindow(parent=self, on_login_callback=self.on_login_sucesso)
+        self.login_window.protocol("WM_DELETE_WINDOW", self.on_login_window_close)
+
+    def on_login_sucesso(self, username, user_type):
+        self.user_type = user_type
+        self.user = username
+        self.login_window.destroy()
+        self.deiconify()
+        self._atualizar_acessos()
+
+    def on_login_window_close(self):
+        self.deiconify()  # Mostra a janela principal de novo
+        self.login_window.destroy()
+
+    def open_new_user_window(self):
+        self.withdraw()  # Esconde a janela principal
+        self.new_user_window = NewUserWindow(parent=self, users_file="config/users.json")
+        self.new_user_window.protocol("WM_DELETE_WINDOW", self.on_new_user_window_close)
+
+    def on_new_user_window_close(self):
+        self.deiconify()  # Mostra a janela principal de novo
+        self.new_user_window.destroy()
 
     def open_adjust_positions(self):
         template_path = "data/raw/fba_template.jpg"
         self.withdraw()  # Esconde a janela principal
-        self.adjust_window = AdjustPositionsWindow(self, template_path= template_path)
+        self.adjust_window = AdjustPositionsWindow(self, template_path=template_path)
         self.adjust_window.protocol("WM_DELETE_WINDOW", self.on_adjust_positions_close)
 
     def on_adjust_positions_close(self):
         self.adjust_window.destroy()
+        self.deiconify()  # Mostra a janela principal de novo
+
+    def open_mask_window(self):
+        self.withdraw()
+        template_path = "data/raw/fba_template.jpg"
+        self.mask_window = LeafMaskCreator(self, template_path)
+        self.mask_window.protocol("WM_DELETE_WINDOW", self.on_mask_window_close)
+
+    def on_mask_window_close(self):
+        if self.mask_window is not None:
+            self.mask_window.destroy()
+            self.mask_window = None
+        self.deiconify()  # reaparece janela principal
+
+    def open_alignment_adjust_window(self):
+        self.withdraw()
+        current_path = "data/raw/fba_actual.jpg"
+        self.alignment_adjust_window = AlignmentWindow(self, current_path)
+        self.alignment_adjust_window.protocol("WM_DELETE_WINDOW", self.on_alignment_adjust_window_close)
+
+    def on_alignment_adjust_window_close(self):
+        self.alignment_adjust_window.destroy()
+        self.deiconify()  # Mostra a janela principal de novo
+
+    def open_check_camera_position_window(self):
+        self.withdraw()  # Esconde a janela principal
+        self.check_camera_position_window = CameraAdjustPosition(parent=self,
+                                                                 image_path="data/raw/fba_template_persp.jpg")
+        self.check_camera_position_window.protocol("WM_DELETE_WINDOW", self.on_check_camera_position_window_close)
+
+    def on_check_camera_position_window_close(self):
+        self.check_camera_position_window.destroy()
         self.deiconify()  # Mostra a janela principal de novo
 
     def open_gallery(self):
@@ -116,22 +171,26 @@ class App(ctk.CTk):
         self.gallery_window = GalleryWindow(self)
         self.gallery_window.protocol("WM_DELETE_WINDOW", self.on_gallery_close)
 
-    def open_check_camera_position_window(self):
-        self.withdraw()  # Esconde a janela principal
-        self.check_camera_position_window = CameraAdjustPosition(parent=self, image_path="data/raw/fba_template_persp.jpg")
-        self.check_camera_position_window.protocol("WM_DELETE_WINDOW", self.on_check_camera_position_window_close)
+    def on_gallery_close(self):
+        self.gallery_window.destroy()
+        self.deiconify()  # Mostra a janela principal de novo
 
-    def open_login_window(self):
-        self.withdraw()  # Esconde a janela principal
-        self.login_window = LoginWindow(parent=self,on_login_callback=self.on_login_sucesso)
-        self.login_window.protocol("WM_DELETE_WINDOW", self.on_login_window_close)
+    def open_inspection(self):
+        self.withdraw()
+        mask_path = "data/mask/leaf_mask.png"
+        template_path = "data/raw/fba_template.jpg"
+        current_path = "data/raw/fba_actual.jpg"
+        self.inspection_window = InspectionWindow(self,
+                                                  template_path,
+                                                  current_path,
+                                                  mask_path,
+                                                  self.user_type,
+                                                  self.user)
+        self.inspection_window.protocol("WM_DELETE_WINDOW", self.on_inspection_close)
 
-    def on_login_sucesso(self, username, user_type):
-        self.user_type = user_type
-        self.user=username
-        self.login_window.destroy()
-        self.deiconify()
-        self._atualizar_acessos()
+    def on_inspection_close(self):
+        self.inspection_window.destroy()
+        self.deiconify()  # Mostra a janela principal de novo
 
     def _atualizar_acessos(self):
         if self.user_type == "User":
@@ -157,69 +216,12 @@ class App(ctk.CTk):
             self.mask_window_button.configure(state="normal")
             self.alignment_adjust_window_button.configure(state="normal")
             self.check_camera_psotion_button.configure(state="normal")
-           
-
-    def on_login_window_close(self):
-        self.deiconify()  # Mostra a janela principal de novo
-        self.login_window.destroy()
-
-    def open_new_user_window(self):
-        self.withdraw()  # Esconde a janela principal
-        self.new_user_window = NewUserWindow(parent=self, users_file="config/users.json")
-        self.new_user_window.protocol("WM_DELETE_WINDOW", self.on_new_user_window_close)
-
-    def on_new_user_window_close(self):
-        self.deiconify()  # Mostra a janela principal de novo
-        self.new_user_window.destroy()
-
-    def on_gallery_close(self):
-        self.gallery_window.destroy()
-        self.deiconify()  # Mostra a janela principal de novo
-
-    def open_inspection(self):
-        self.withdraw()
-        mask_path = "data/mask/leaf_mask.png"
-        template_path = "data/raw/fba_template.jpg"
-        current_path = "data/raw/fba_actual.jpg"
-        self.inspection_window =  InspectionWindow(self, template_path, current_path, mask_path, self.user_type, self.user)
-        self.inspection_window.protocol("WM_DELETE_WINDOW", self.on_inspection_close)
-
-    def on_check_camera_position_window_close(self):
-        self.check_camera_position_window.destroy()
-        self.deiconify()  # Mostra a janela principal de novo
-
-    def on_inspection_close(self):
-        self.inspection_window.destroy()
-        self.deiconify()  # Mostra a janela principal de novo
-
-    def open_mask_window(self):
-        self.withdraw()
-        template_path = "data/raw/fba_template.jpg"
-        self.mask_window = LeafMaskCreator(self, template_path)
-        self.mask_window.protocol("WM_DELETE_WINDOW", self.on_mask_window_close)
-
-    def on_mask_window_close(self):
-        if self.mask_window is not None:
-            self.mask_window.destroy()
-            self.mask_window = None
-        self.deiconify()  # reaparece janela principal
-
-    def open_alignment_adjust_window(self):
-        self.withdraw()
-        current_path = "data/raw/fba_actual.jpg"
-        self.alignment_adjust_window = AlignmentWindow(self, current_path)
-        self.alignment_adjust_window.protocol("WM_DELETE_WINDOW", self.on_alignment_adjust_window_close)
-
-    def on_alignment_adjust_window_close(self):
-        self.alignment_adjust_window.destroy()
-        self.deiconify()  # Mostra a janela principal de novo
 
     def on_close(self):
         self.preview_running = False
         if self.cap and self.cap.isOpened():
             self.cap.release()
         self.destroy()
-
 
 if __name__ == "__main__":
     app = App()

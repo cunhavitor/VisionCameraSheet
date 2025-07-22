@@ -6,7 +6,7 @@ def _validate_numeric(value):
     # Permite números inteiros e vazios (para apagar temporariamente)
     return value == "" or value.isdigit()
 
-def create_param_entry(parent_frame, label_text, var_obj, bind_command, master_widget=None):
+def create_param_entry(parent_frame, label_text, var_obj, bind_command=None, master_widget=None):
     """
     Cria um par Label + Entry num frame interno com validação numérica.
 

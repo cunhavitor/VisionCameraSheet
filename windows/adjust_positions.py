@@ -2,20 +2,21 @@ import os
 import json
 import cv2
 import tkinter as tk
-from tkinter import simpledialog
+
 import numpy as np
-from PIL import Image, ImageDraw, ImageTk
+from PIL import Image, ImageTk
 import customtkinter as ctk
-from customtkinter import CTkLabel, CTkButton
+from customtkinter import CTkButton
 from ultralytics import YOLO
 from config.config import TEMPLATE_IMAGE_PATH, INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT
 from config.utils import center_window
-from widgets.param_entry_simple_numeric import create_param_entry
+
 
 
 class AdjustPositionsWindow(ctk.CTkToplevel):
     def __init__(self, master=None, template_path=None):
         super().__init__(master)
+        self.base_img_np = None
         self.annotated_imf_lines = None
         self.polygons_instances = []
         self.title("Ajustar Máscara")
