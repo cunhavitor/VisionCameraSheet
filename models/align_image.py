@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import json
 
-orb = cv2.ORB_create(nfeatures=1000)
+orb = cv2.ORB_create(nfeatures=1500)
 
 def align_with_template(current_img, template_img, config_path="config/config_alignment.json", resize_scale=0.5):
     """

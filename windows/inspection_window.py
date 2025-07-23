@@ -79,7 +79,12 @@ class InspectionWindow(ctk.CTkToplevel):
         self.user_type = user_type
         self.user = user
 
+        s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
         self.template_full = cv2.imread(self.template_path)
+        self.mask_full = cv2.imread(self.mask_path, cv2.IMREAD_GRAYSCALE)
+        self.template_masked = cv2.bitwise_and(self.template_full, self.template_full, mask=self.mask_full)
+        self.tk_template = _prepare_image_grayscale(self.template_masked, s)
+
 
         # load params
         self._load_params()
@@ -131,10 +136,14 @@ class InspectionWindow(ctk.CTkToplevel):
 
         # DefeitosInfo
 
-        self.label_info = ctk.CTkLabel(self.sliders_frame,
-                                       text="Total de defeitos\n(verificados)",
-                                       justify="left",
-                                       width=100)
+        self.label_info = ctk.CTkLabel(
+            self.sliders_frame,
+            text="Total de defeitos\n(verificados)",  # texto inicial
+            justify="left",
+            width=200,  # largura fixa
+            wraplength=200,  # quebra linha automática com base na largura
+            anchor="nw"  # alinha no topo à esquerda (opcional)
+        )
         self.label_info.pack(side="left", padx=(0, 40), pady=(40, 40))
 
         # Tuner Window
@@ -246,28 +255,29 @@ class InspectionWindow(ctk.CTkToplevel):
         self._analisar_latas_com_defeito()
 
     def _show_defects(self):
-        # Preparação das imagens
-        start_time = time.perf_counter()
+        total_start = time.perf_counter()
         s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
 
-        # 1) Load images and mask
-
+        # 1) Leitura da imagem
+        t0 = time.perf_counter()
         self.current_full = cv2.imread(self.current_path)
+        print(f"[Tempo] Leitura da imagem: {time.perf_counter() - t0:.4f} segundos")
 
-        self.mask_full = cv2.imread(self.mask_path, cv2.IMREAD_GRAYSCALE)
-
-        # 2) Align current image to template
+        # 2) Alinhamento com template
+        t0 = time.perf_counter()
         self.aligned_full, M = align_with_template(self.current_full, self.template_full)
+        print(f"[Tempo] Alinhamento com template: {time.perf_counter() - t0:.4f} segundos")
 
-        # 3) Apply original mask (template space) to aligned image
+        # 3) Aplicação da máscara
+        t0 = time.perf_counter()
         self.current_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full, mask=self.mask_full)
-        self.template_masked = cv2.bitwise_and(self.template_full, self.template_full, mask=self.mask_full)
+        print(f"[Tempo] Aplicação de máscara: {time.perf_counter() - t0:.4f} segundos")
 
-        # 4) Use fixed mask to detect defects (already in aligned space)
-        # --- UPDATED CALL TO DETECT_DEFECTS ---
+        # 4) Detecção de defeitos
+        t0 = time.perf_counter()
         self.defect_mask, self.defect_contours, \
             self.darker_mask_filtered, self.yellow_mask, \
-            self.blue_mask, self.red_mask = detect_defects(  # <-- NEW RETURN VALUES
+            self.blue_mask, self.red_mask = detect_defects(
             self.template_masked,
             self.current_masked,
             self.mask_full,
@@ -279,34 +289,31 @@ class InspectionWindow(ctk.CTkToplevel):
             self.bright_morph_iterations,
             self.min_defect_area,
             self.dark_gradient_threshold,
-            self.blue_threshold,  # <-- NEW
-            self.red_threshold  # <-- NEW
+            self.blue_threshold,
+            self.red_threshold
         )
+        print(f"[Tempo] Detecção de defeitos: {time.perf_counter() - t0:.4f} segundos")
 
-        self.tk_template = _prepare_image_grayscale(self.template_masked, s)
+        # 5) Preparação para visualização
+        t0 = time.perf_counter()
         self.tk_aligned = _prepare_image_grayscale(self.current_masked, s)
+        self.tk_defect = _prepare_image_grayscale(self.current_masked, s, draw_contours=self.defect_contours)
+        print(f"[Tempo] Preparação para visualização: {time.perf_counter() - t0:.4f} segundos")
 
-        aligned_masked = cv2.bitwise_and(self.aligned_full, self.aligned_full,
-                                         mask=self.mask_full)
-        self.tk_defect = _prepare_image_grayscale(aligned_masked, s, draw_contours=self.defect_contours)
-
-        self.lbl_img.image = self.tk_aligned
-
+        # 6) Atualização da interface
+        t0 = time.perf_counter()
         self.total_defects_var.set(str(len(self.defect_contours)))
-
-        self.lbl_img.image = self.tk_defect
         self._analisar_latas_com_defeito()
 
         if self.toggle_contours.get():
             self.lbl_img.configure(image=self.tk_defect)
-            self.lbl_img.image = self.tk_template
+            self.lbl_img.image = self.tk_defect
         else:
             self.lbl_img.configure(image=self.tk_aligned)
             self.lbl_img.image = self.tk_aligned
+        print(f"[Tempo] Atualização da interface: {time.perf_counter() - t0:.4f} segundos")
 
-        end_time = time.perf_counter()
-
-        print(f"Show Defects demorou {end_time - start_time:.4f} segundos")
+        print(f"[Tempo Total] _show_defects: {time.perf_counter() - total_start:.4f} segundos")
 
     def _toggle_defect_contours(self):
         self.show_defect_contours = self.show_contours_var.get()
@@ -385,9 +392,6 @@ class InspectionWindow(ctk.CTkToplevel):
 
         self.label_info.configure(text=texto)
 
-        self.area_info_textbox.configure(state="normal")
-        self.area_info_textbox.insert("end", "\n\n" + texto)
-        self.area_info_textbox.configure(state="disabled")
         print(texto)
 
     def on_mouse_move(self, event):
@@ -491,9 +495,15 @@ class InspectionWindow(ctk.CTkToplevel):
         if self.toggle.get():
             self.lbl_img.configure(image=self.tk_template)
             self.lbl_img.image = self.tk_template
+            self.toggle_contours.configure(state="disabled")
         else:
-            self.lbl_img.configure(image=self.tk_aligned)
-            self.lbl_img.image = self.tk_aligned
+            self.toggle_contours.configure(state="normal")
+            if self.toggle_contours.get():
+                self.lbl_img.configure(image=self.tk_defect)
+                self.lbl_img.image = self.tk_template
+            else:
+                self.lbl_img.configure(image=self.tk_aligned)
+                self.lbl_img.image = self.tk_aligned
 
     def _save_params(self):
         params = {

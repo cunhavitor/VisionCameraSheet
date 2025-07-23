@@ -1,12 +1,12 @@
 {
-    "dark_threshold": "60",
-    "bright_threshold": "27",
+    "dark_threshold": "46",
+    "bright_threshold": "28 ",
     "blue_threshold": "20",
     "red_threshold": "25",
     "dark_morph_kernel_size": "3",
     "dark_morph_iterations": "1",
-    "bright_morph_kernel_size": "3",
+    "bright_morph_kernel_size": "3 ",
     "bright_morph_iterations": "1",
-    "dark_gradient_threshold": "15",
+    "dark_gradient_threshold": "40",
     "detect_area": "6"
 }
