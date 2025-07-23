@@ -520,3 +520,4 @@ class InspectionWindow(ctk.CTkToplevel):
         }
         with open(self.param_path, "w") as f:
             json.dump(params, f, indent=4)
+
