@@ -9,11 +9,13 @@ from windows.create_users import NewUserWindow
 from windows.gallery import GalleryWindow
 from windows.inspection_window import InspectionWindow
 from windows.login_window import LoginWindow
+from windows.manage_users_window import ManageUserWindow
 
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.manage_users_window = None
         self.new_user_window = None
         self.check_camera_position_window = None
         self.login_window = None
@@ -51,6 +53,10 @@ class App(ctk.CTk):
         self.new_user_button = ctk.CTkButton(self.user_frame, text="Novo User", width=200,
                                              command=self.open_new_user_window)
         self.new_user_button.pack(pady=(0, 10), anchor="center")
+
+        self.manage_users_button = ctk.CTkButton(self.user_frame, text="Gerir Users", width=200,
+                                             command=self.open_manage_users_window)
+        self.manage_users_button.pack(pady=(0, 10), anchor="center")
 
         # --- Coluna do meio (coluna 1) ---
         self.middle_frame = ctk.CTkFrame(self.main_frame)
@@ -98,6 +104,7 @@ class App(ctk.CTk):
         self.mask_window_button.configure(state="disabled")
         self.alignment_adjust_window_button.configure(state="disabled")
         self.check_camera_psotion_button.configure(state="disabled")
+        self.manage_users_button.configure(state="disabled")
 
     def open_login_window(self):
         self.withdraw()  # Esconde a janela principal
@@ -123,7 +130,16 @@ class App(ctk.CTk):
     def on_new_user_window_close(self):
         self.deiconify()  # Mostra a janela principal de novo
         self.new_user_window.destroy()
+    
+    def open_manage_users_window(self):
+        self.withdraw()  # Esconde a janela principal
+        self.manage_users_window = ManageUserWindow(parent=self, users_file="config/users.json")
+        self.manage_users_window.protocol("WM_DELETE_WINDOW", self.on_manage_users_window_close)
 
+    def on_manage_users_window_close(self):
+        self.deiconify()  # Mostra a janela principal de novo
+        self.manage_users_window.destroy()
+        
     def open_adjust_positions(self):
         template_path = "data/raw/fba_template.jpg"
         self.withdraw()  # Esconde a janela principal
@@ -200,7 +216,7 @@ class App(ctk.CTk):
             self.mask_window_button.configure(state="disabled")
             self.alignment_adjust_window_button.configure(state="disabled")
             self.check_camera_psotion_button.configure(state="disabled")
-
+            self.manage_users_button.configure(state="disabled")
 
         elif self.user_type == "Admin":
             self.new_user_button.configure(state="normal")
@@ -208,6 +224,7 @@ class App(ctk.CTk):
             self.adjust_positions_button.configure(state="normal")
             self.mask_window_button.configure(state="normal")
             self.alignment_adjust_window_button.configure(state="normal")
+            #self.manage_users_button.configure(state="normal")
 
         elif self.user_type == "SuperAdmin":
             self.new_user_button.configure(state="normal")
@@ -216,6 +233,7 @@ class App(ctk.CTk):
             self.mask_window_button.configure(state="normal")
             self.alignment_adjust_window_button.configure(state="normal")
             self.check_camera_psotion_button.configure(state="normal")
+            self.manage_users_button.configure(state="normal")
 
     def on_close(self):
         self.preview_running = False

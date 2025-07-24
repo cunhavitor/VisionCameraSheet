@@ -14,6 +14,7 @@ from models.defect_detector import detect_defects
 from widgets.param_entry_hor import create_param_entry
 from windows.defect_tuner_window import DefectTunerWindow
 
+
 def _prepare_image_grayscale(img_cv, size, draw_contours=None):
     # redimensiona e converte para grayscale CTkImage; opcionalmente desenha contornos
     resized = cv2.resize(img_cv, size)
@@ -82,6 +83,10 @@ class InspectionWindow(ctk.CTkToplevel):
         s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
         self.template_full = cv2.imread(self.template_path)
         self.mask_full = cv2.imread(self.mask_path, cv2.IMREAD_GRAYSCALE)
+
+        self.mask1 = cv2.imread("data/mask/leaf_mask1.png", cv2.IMREAD_GRAYSCALE)
+        self.mask2 = cv2.imread("data/mask/leaf_mask2.png", cv2.IMREAD_GRAYSCALE)
+
         self.template_masked = cv2.bitwise_and(self.template_full, self.template_full, mask=self.mask_full)
         self.tk_template = _prepare_image_grayscale(self.template_masked, s)
 
@@ -254,6 +259,8 @@ class InspectionWindow(ctk.CTkToplevel):
         self._load_params()
         self._analisar_latas_com_defeito()
 
+
+
     def _show_defects(self):
         total_start = time.perf_counter()
         s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
@@ -407,7 +414,7 @@ class InspectionWindow(ctk.CTkToplevel):
         img_x = int(x * img_w / lbl_w)
         img_y = int(y * img_h / lbl_h)
 
-        # Limita área 50x50 para "zoom"
+        # Limita área para "zoom"
         x1 = max(img_x - 10, 0)
         y1 = max(img_y - 10, 0)
         x2 = min(img_x + 10, img_w)
@@ -491,6 +498,7 @@ class InspectionWindow(ctk.CTkToplevel):
             self._show_defects()
             self._save_params()
 
+    #toggle template or image
     def _toggle_image(self):
         if self.toggle.get():
             self.lbl_img.configure(image=self.tk_template)

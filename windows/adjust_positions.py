@@ -515,6 +515,7 @@ class AdjustPositionsWindow(ctk.CTkToplevel):
 
         print("[INFO] Numeração aplicada e imagem atualizada.")
 
+    # method for create 1 mask with 48 cans
     def on_salvar_mascara(self):
         # Cria uma imagem preta (tudo zeros) do tamanho da pré-visualização (altura, largura)
         mask = np.zeros((self.img_size[1], self.img_size[0]), dtype=np.uint8)
@@ -534,6 +535,34 @@ class AdjustPositionsWindow(ctk.CTkToplevel):
 
         # Continua salvando os polígonos no txt
         self.salvar_poligonos_txt()
+
+    # method to save 2 masks 2x24
+    '''def on_salvar_mascara(self):
+        # Cria duas imagens pretas (grayscale) do mesmo tamanho
+        mask1 = np.zeros((self.img_size[1], self.img_size[0]), dtype=np.uint8)  # latas 1 a 24
+        mask2 = np.zeros((self.img_size[1], self.img_size[0]), dtype=np.uint8)  # latas 25 a 48
+
+        # Divide os polígonos em dois grupos: 0-23 e 24-47
+        for i, polygon in enumerate(self.polygons):
+            pts = np.array(polygon, dtype=np.int32)
+            if i < 24:
+                cv2.fillPoly(mask1, [pts], 255)
+            else:
+                cv2.fillPoly(mask2, [pts], 255)
+
+        # Garante que a pasta existe
+        os.makedirs("data/mask", exist_ok=True)
+
+        # Salva as duas máscaras
+        cv2.imwrite("data/mask/leaf_mask1.png", mask1)
+        cv2.imwrite("data/mask/leaf_mask2.png", mask2)
+
+        print("[INFO] Máscaras salvas em:")
+        print(" - 'data/mask/leaf_mask1.png' (latas 1 a 24)")
+        print(" - 'data/mask/leaf_mask2.png' (latas 25 a 48)")
+
+        # Continua salvando os polígonos no txt
+        self.salvar_poligonos_txt()'''
 
     def salvar_poligonos_txt(self, caminho="data/mask/instancias_poligonos.txt"):
         """
