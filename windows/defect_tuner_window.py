@@ -61,6 +61,12 @@ class DefectTunerWindow(ctk.CTkToplevel):
         self.view_mode = ctk.StringVar(value="Final")
         self.display_mode = ctk.StringVar(value="PB")
 
+        # Para debounce da atualização (evitar muitas chamadas rapidíssimas)
+        self._update_scheduled = False
+
+
+
+
         self.control_frame = ctk.CTkFrame(self, width=500)
         self.control_frame.pack(side="left", fill="y", padx=10, pady=10)
         self.control_frame.propagate(False)
@@ -91,6 +97,38 @@ class DefectTunerWindow(ctk.CTkToplevel):
         self._create_buttons()
         self._update_preview()
 
+        self._create_reset_button()
+
+    def _create_reset_button(self):
+        container_reset = ctk.CTkFrame(self.control_frame, fg_color="gray")
+        container_reset.pack(fill="x", padx=30, pady=(0, 20))
+
+        btn_reset = ctk.CTkButton(container_reset, text="Reset Valores Padrão", command=self._reset_to_defaults)
+        btn_reset.pack(padx=20, pady=10)
+
+    def _reset_to_defaults(self):
+        # Define os valores padrão originais
+        self.dark_threshold_var.set(str(30))
+        self.bright_threshold_var.set(str(30))
+        self.blue_threshold_var.set(str(25))
+        self.red_threshold_var.set(str(25))
+        self.dark_kernel_var.set(str(3))
+        self.dark_iterations_var.set(str(1))
+        self.bright_kernel_var.set(str(3))
+        self.bright_iterations_var.set(str(1))
+        self.dark_gradient_threshold_var.set(str(10))
+        self.min_defect_area_var.set(str(1))
+        self._update_preview()
+
+    def _schedule_update_preview(self):
+        if not self._update_scheduled:
+            self._update_scheduled = True
+            # Atualiza a preview daqui a 150ms (debounce)
+            self.after(100, self._debounced_update)
+
+    def _debounced_update(self):
+        self._update_scheduled = False
+        self._update_preview()
 
 
     def _create_sliders(self):
@@ -334,6 +372,13 @@ class DefectTunerWindow(ctk.CTkToplevel):
             area = cv2.contourArea(cnt)
             if area >= int(self.min_defect_area_var.get()):
                 cv2.drawContours(preview, [cnt], -1, color, 5)
+
+                (x, y), radius = cv2.minEnclosingCircle(cnt)
+                center = (int(x), int(y))
+                radius = int(radius) + 3
+
+                cv2.circle(preview, center, radius, (0, 0, 255), 3)
+
                 num_defeitos += 1
 
         # Atualizar label de contagem
@@ -422,21 +467,26 @@ class DefectTunerWindow(ctk.CTkToplevel):
 
         # Os callbacks para sliders que só atualizam a preview
 
+
     def _on_dark_threshold_change(self, new_value=None):
         self.last_changed_param = "dark_threshold"
         #self._update_preview()
+        self._schedule_update_preview()
 
     def _on_bright_threshold_change(self, new_value=None):
         self.last_changed_param = "bright_threshold"
         #self._update_preview()
+        self._schedule_update_preview()
 
     def _on_blue_threshold_change(self, new_value=None):
         self.last_changed_param = "blue_threshold"
         #self._update_preview()
+        self._schedule_update_preview()
 
     def _on_red_threshold_change(self, new_value=None):
         self.last_changed_param = "red_threshold"
         #self._update_preview()
+        self._schedule_update_preview()
 
     def _on_dark_kernel_change(self, new_value=None):
         '''teste'''
@@ -457,6 +507,7 @@ class DefectTunerWindow(ctk.CTkToplevel):
     def _on_dark_gradient_threshold_change(self, new_value=None):
         self.last_changed_param = "dark_gradient_threshold"
         #self._update_preview()
+        self._schedule_update_preview()
 
     def _on_min_defect_area_change(self, new_value=None):
         '''teste'''

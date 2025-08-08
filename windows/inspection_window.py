@@ -80,6 +80,9 @@ class InspectionWindow(ctk.CTkToplevel):
         self.user_type = user_type
         self.user = user
 
+        self.defect_contours = []
+
+
         s = (INSPECTION_PREVIEW_WIDTH, INSPECTION_PREVIEW_HEIGHT)
         self.template_full = cv2.imread(self.template_path)
         self.mask_full = cv2.imread(self.mask_path, cv2.IMREAD_GRAYSCALE)
@@ -90,6 +93,10 @@ class InspectionWindow(ctk.CTkToplevel):
         self.template_masked = cv2.bitwise_and(self.template_full, self.template_full, mask=self.mask_full)
         self.tk_template = _prepare_image_grayscale(self.template_masked, s)
 
+        '''# Abrir a webcam uma vez
+        self.cap = cv2.VideoCapture(0)
+        if not self.cap.isOpened():
+            raise RuntimeError("Não consegui abrir a webcam")'''
 
         # load params
         self._load_params()
@@ -259,7 +266,19 @@ class InspectionWindow(ctk.CTkToplevel):
         self._load_params()
         self._analisar_latas_com_defeito()
 
+    '''def close(self):
+        # Fecha a webcam ao sair
+        if self.cap.isOpened():
+            self.cap.release()
 
+    def __del__(self):
+        self.close()'''
+
+    '''def capture_frame(self):
+        ret, frame = self.cap.read()
+        if not ret:
+            raise RuntimeError("Falha a capturar frame da webcam")
+        return frame'''
 
     def _show_defects(self):
         total_start = time.perf_counter()
@@ -268,6 +287,8 @@ class InspectionWindow(ctk.CTkToplevel):
         # 1) Leitura da imagem
         t0 = time.perf_counter()
         self.current_full = cv2.imread(self.current_path)
+        #self.current_full = self.capture_frame()  # 0 é a webcam padrão
+
         print(f"[Tempo] Leitura da imagem: {time.perf_counter() - t0:.4f} segundos")
 
         # 2) Alinhamento com template
@@ -378,6 +399,8 @@ class InspectionWindow(ctk.CTkToplevel):
 
         # Analisa defeitos
         latas_com_defeito = set()
+        if not hasattr(self, "defect_contours") or not self.defect_contours:
+            return
         for cnt in self.defect_contours:
             m = cv2.moments(cnt)
             if m["m00"] == 0:

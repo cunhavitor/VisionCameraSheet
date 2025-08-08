@@ -32,6 +32,7 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("dark")
         self.user_type = ""
         self.user = ""
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         # Layout principal
         self.main_frame = ctk.CTkFrame(self)
