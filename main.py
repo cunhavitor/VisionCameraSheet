@@ -4,6 +4,7 @@ from config.utils import center_window
 from windows.adjust_positions import AdjustPositionsWindow
 from windows.alignment_adjust import AlignmentWindow
 from windows.camera_adjust_positions import CameraAdjustPosition
+from windows.capture_sheet import CaptureSheetWindow
 from windows.create_leaf_mask import LeafMaskCreator
 from windows.create_users import NewUserWindow
 from windows.gallery import GalleryWindow
@@ -66,6 +67,10 @@ class App(ctk.CTk):
         self.status_label = ctk.CTkLabel(self.middle_frame, text="Settings:", width=140, wraplength=140,
                                          text_color="white", font=("Arial", 20))
         self.status_label.pack(side="top", pady=10)
+
+        self.capture_sheet = ctk.CTkButton(self.middle_frame, text="🛠️ Capture Sheet",
+                                                     command=self.open_capture_sheet, width=200)
+        self.capture_sheet.pack(pady=(0, 10), anchor="center")
 
         self.adjust_positions_button = ctk.CTkButton(self.middle_frame, text="🛠️ Adjust Positions",
                                                      command=self.open_adjust_positions, width=200)
@@ -140,7 +145,17 @@ class App(ctk.CTk):
     def on_manage_users_window_close(self):
         self.deiconify()  # Mostra a janela principal de novo
         self.manage_users_window.destroy()
-        
+
+    def open_capture_sheet(self):
+        template_path = "data/raw/fba_template.jpg"
+        self.withdraw()  # Esconde a janela principal
+        self.adjust_window = CaptureSheetWindow(self, template_path=template_path)
+        self.adjust_window.protocol("WM_DELETE_WINDOW", self.on_capture_sheet_close)
+
+    def on_capture_sheet_close(self):
+        self.adjust_window.destroy()
+        self.deiconify()  # Mostra a janela principal de novo
+
     def open_adjust_positions(self):
         template_path = "data/raw/fba_template.jpg"
         self.withdraw()  # Esconde a janela principal
