@@ -1,3 +1,13 @@
+
+# # Entrar na pasta do projeto
+# cd ~/projects/VisionCameraSheet
+
+# Criar o ambiente virtual chamado 'venv'
+# python3 -m venv venv
+
+# Ativar o ambiente virtual
+# source venv/bin/activate
+
 import customtkinter as ctk
 
 from config.utils import center_window
